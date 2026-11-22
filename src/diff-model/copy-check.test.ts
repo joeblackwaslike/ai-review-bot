@@ -582,11 +582,9 @@ describe("verifyCopy", () => {
 
 	it("weighs a receiver-only divergence at least 1", () => {
 		const a = body(10).map((l, i) =>
-			i === 4 ? "  const v4 = this.compute(4) + offset;" : l,
+			i === 4 ? "  return this.compute(4) + offset;" : l,
 		);
-		const b = a.map((l, i) =>
-			i === 4 ? "  const v4 = compute(4) + offset;" : l,
-		);
+		const b = a.map((l, i) => (i === 4 ? "  return compute(4) + offset;" : l));
 		const files = [
 			withContext("src/a.ts", 10, a, ["done"]),
 			added("src/b.ts", 3, b),
@@ -876,5 +874,19 @@ describe("verifyCopy comment starts and member renames", () => {
 		expect(
 			relabeled("rename", "  use(Foo::bar, 4);", "  use(Foo::baz, 4);"),
 		).toBe(false);
+	});
+});
+
+describe("verifyCopy shared limits", () => {
+	it("rejects a block holding a line over the 2000-character cap", () => {
+		const long = body(6).map((l, i) =>
+			i === 2 ? `${l}//${"x".repeat(2100)}` : l,
+		);
+		const files = [
+			withContext("src/a.ts", 10, long, ["done"]),
+			added("src/b.ts", 3, long),
+		];
+		const op = claim(head("src/a.ts", 10, 15), head("src/b.ts", 3, 8));
+		expect(verifyCopy(op, files, [])).toBe(false);
 	});
 });

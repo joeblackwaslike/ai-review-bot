@@ -356,6 +356,7 @@ function hasSubstance(lines: string[]): boolean {
 }
 
 function copyBlockHolds(lines: string[], indentSensitive: boolean): boolean {
+	if (lines.some((line) => line.length > MAX_ANALYZED_LINE)) return false;
 	const present = lines.filter((line) => line.trim() !== "").length;
 	const first = (lines.find((line) => line.trim() !== "") ?? "").trim();
 	const counted = lines.filter((line) => line.trim().length >= 3).length;

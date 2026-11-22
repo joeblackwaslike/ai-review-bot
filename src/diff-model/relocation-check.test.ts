@@ -2928,7 +2928,7 @@ describe("verifyRelocation comment starts and member renames", () => {
 		expect(relabeled("comment-only", a, b)).toBe(false);
 	});
 
-	it("accepts a hash comment after whitespace in a python file", () => {
+	it("does not accept a trailing hash comment edit labelled comment-only", () => {
 		const base = withLine(fn(body(20)), 6, "  x = 1  # note");
 		const head = withLine(base, 6, "  x = 1  # changed");
 		const files = [
@@ -2957,7 +2957,7 @@ describe("verifyRelocation comment starts and member renames", () => {
 				class: "comment-only" as const,
 			})),
 		};
-		expect(verifyRelocation(lie, files)).toBe(true);
+		expect(verifyRelocation(lie, files)).toBe(false);
 	});
 
 	it("drops a changed member after an arrow or scope operator labelled rename", () => {

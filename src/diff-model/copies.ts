@@ -18,6 +18,7 @@ interface Pending {
 	from: Run;
 	fromStart: number;
 	fromEnd: number;
+	renamed: number;
 }
 
 function headSpan(run: Run, start: number, end: number): Span {
@@ -44,6 +45,7 @@ function toCopy(from: Run, to: Run, built: Built): Pending {
 		from,
 		fromStart: built.fromStart,
 		fromEnd: built.fromEnd,
+		renamed: built.renamed,
 	};
 }
 
@@ -68,14 +70,14 @@ function resolve(chain: Candidate[], budget: WorkBudget): Pending[] {
 }
 
 function settle(
-	{ op, from, fromStart, fromEnd }: Pending,
+	{ op, from, fromStart, fromEnd, renamed }: Pending,
 	before: Map<Run, boolean[]>,
 ): Operation {
 	const weighed = op.divergences.filter(
 		(d) => d.class === "code" || d.class === "signature",
 	).length;
 	const hasReceiver = op.divergences.some((d) => d.class === "receiver");
-	const count = Math.max(weighed, hasReceiver ? 1 : 0);
+	const count = weighed + renamed + (hasReceiver ? 1 : 0);
 	const claimed = before.get(from);
 	let sourceNew = false;
 	for (let i = fromStart; i < fromEnd; i++)
@@ -115,6 +117,7 @@ export function findCopies(
 	const seeds = selectMatches(sources, targets, MIN_SEED_LINES, accept, {
 		allowSameFile: true,
 		sharedSources: true,
+		charge: () => budget.spendExtensions(1),
 	});
 	const groups = new Map<string, Candidate[]>();
 	for (const seed of seeds) {

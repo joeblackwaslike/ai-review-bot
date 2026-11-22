@@ -133,7 +133,10 @@ function hasSubstance(lines: string[]): boolean {
 	});
 }
 
+const MAX_LINE_CHARS = 2000;
+
 function floorHolds(lines: string[], indentSensitive: boolean): boolean {
+	if (lines.some((l) => l.length > MAX_LINE_CHARS)) return false;
 	const counted = lines.filter((l) => l.trim().length >= MIN_LINE_CHARS).length;
 	const present = lines.map((l) => l.trim()).filter((l) => l !== "");
 	const chars = present.join("").replace(/\s/g, "").length;
@@ -152,13 +155,6 @@ function rangesOverlap(a: Side, b: Side): boolean {
 		(a.positions[0] as number) <= (b.positions.at(-1) as number) &&
 		(b.positions[0] as number) <= (a.positions.at(-1) as number)
 	);
-}
-
-function expectedWeight(op: Operation, sourceNew: boolean): number {
-	const weighed = op.divergences.filter((d) => d.class === "code").length;
-	const receivers = op.divergences.some((d) => d.class === "receiver");
-	const count = Math.max(weighed, receivers ? 1 : 0);
-	return sourceNew ? Math.max(1, count) : count;
 }
 
 /**
@@ -204,10 +200,12 @@ export function verifyCopy(
 		(n) => added?.has(n) === true && covered?.has(n) !== true,
 	);
 	if ((op.shape?.sourceNew === true) !== sourceNew) return false;
-	if (op.reviewWeight !== expectedWeight(op, sourceNew)) return false;
 	const spent = claimedDivergences(op, [from.side], [to.side]);
 	if (!spent) return false;
-	if (classesHold(op, [from.side], [to.side]) === null) return false;
+	const weight = classesHold(op, [from.side], [to.side]);
+	if (weight === null) return false;
+	if (op.reviewWeight !== (sourceNew ? Math.max(1, weight) : weight))
+		return false;
 	return accountedPositionally(
 		unclaimed([from.side], spent.base),
 		unclaimed([to.side], spent.head),

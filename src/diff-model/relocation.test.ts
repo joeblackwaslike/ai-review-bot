@@ -1161,7 +1161,8 @@ describe("findRelocations same-file uniqueness", () => {
 			"@@ -30,7 +30,7 @@",
 			...region("c"),
 		].join("\n");
-		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+		const ops = findRelocations([pushFile("src/a.ts", patch)]);
+		expect(ops.filter((op) => op.type === "relocation")).toEqual([]);
 	});
 });
 

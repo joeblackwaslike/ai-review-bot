@@ -472,7 +472,11 @@ function commentStart(line: string): number {
 			else if (ch === quote) quote = "";
 		} else if (ch === '"' || ch === "'" || ch === "`") {
 			quote = ch;
-		} else if (ch === "/" && line[i + 1] === "/") {
+		} else if (
+			ch === "/" &&
+			line[i + 1] === "/" &&
+			(i === 0 || /\s/.test(line[i - 1] as string))
+		) {
 			return i;
 		}
 	}

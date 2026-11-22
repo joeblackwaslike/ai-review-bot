@@ -452,3 +452,44 @@ describe("findCopies", () => {
 		).toEqual([]);
 	});
 });
+
+describe("copies under the shared work limits", () => {
+	it("never claims a block holding a line over the 2000-character cap", () => {
+		const long = body(6).map((l, i) =>
+			i === 2 ? `${l}//${"x".repeat(2100)}` : l,
+		);
+		expect(
+			copies([
+				withContext("src/a.ts", 10, long, ["done"]),
+				added("src/b.ts", 3, long),
+			]),
+		).toEqual([]);
+	});
+
+	it("claims nothing once the extension pool is empty", () => {
+		const files = [
+			withContext("src/a.ts", 10, body(6), ["done"]),
+			added("src/b.ts", 3, body(6)),
+		];
+		expect(copies(files)).toHaveLength(1);
+		expect(copies(files, { extensions: 0 })).toEqual([]);
+	});
+
+	it("weighs a renamed identifier once, as relocations do", () => {
+		const source = body(30);
+		source.splice(2, 0, "  const total = compute(0);");
+		source.splice(12, 0, "  log(total, 1);");
+		source.splice(22, 0, "  return finalize(total);");
+		const renamed = source.map((l) => l.replaceAll("total", "sum"));
+		const [op] = copies([
+			withContext("src/a.ts", 10, source, ["done"]),
+			added("src/b.ts", 3, renamed),
+		]);
+		expect(op?.divergences.map((d) => d.class)).toEqual([
+			"rename",
+			"rename",
+			"rename",
+		]);
+		expect(op?.reviewWeight).toBe(1);
+	});
+});
