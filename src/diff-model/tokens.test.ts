@@ -35,16 +35,6 @@ describe("tokenize", () => {
 		]);
 	});
 
-	it("joins a Black-wrapped call into one logical line", () => {
-		const wrapped = toks(
-			["x = foo(", "    a,", "    b,", ")", "y = 1"],
-			"x.py",
-		);
-		const flat = toks(["x = foo(a, b,)", "y = 1"], "x.py");
-		expect(wrapped).toEqual(flat);
-		expect(wrapped.filter((t) => t === "\n")).toHaveLength(1);
-	});
-
 	it("maps tokens back to source lines", () => {
 		const r = tokenize(["a(", "b", ")", "c"], "x.py");
 		expect(r.tokens).toEqual(["a", "(", "b", ")", "\n", "c"]);

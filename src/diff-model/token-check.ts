@@ -112,10 +112,7 @@ const ODD_BREAKS =
 const UNSAFE_TEXT = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 const JSX_START = /<[A-Za-z][\w.-]*[\s>/]|<\/|\/>|<>/;
 const BLOCK_SCALAR = /[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$/;
-const F_DQ = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)"/u;
-const F_SQ = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)'/u;
-const NESTED_DQ = /\{[^{}]*"/;
-const NESTED_SQ = /\{[^{}]*'/;
+const F_OPEN = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)(["'])/gu;
 const IDENTIFIER = /[\p{ID_Start}_$][\p{ID_Continue}$\u200c\u200d]*/uy;
 const NUMBER = /0[xXoObB]\w*|\d[\d_]*(?:\.(?!\.)[\d_]*)?(?:[eE][+-]?\d+)?\w*/y;
 const STRING_PREFIX = /^[rbfuRBFU]{1,2}$/;
@@ -189,15 +186,28 @@ export function unbalancedBlockComment(
 }
 
 function nestsFStringQuote(line: string): boolean {
-	for (const [start, nested] of [
-		[F_DQ, NESTED_DQ],
-		[F_SQ, NESTED_SQ],
-	] as const) {
-		const found = start.exec(line);
-		if (found && nested.test(line.slice(found.index + found[0].length)))
-			return true;
+	F_OPEN.lastIndex = 0;
+	for (let m = F_OPEN.exec(line); m; m = F_OPEN.exec(line)) {
+		let depth = 0;
+		let i = m.index + m[0].length;
+		for (; i < line.length && (line[i] !== m[1] || depth > 0); i++) {
+			const c = line[i];
+			if (c === "\\") i++;
+			else if (c === "{") depth++;
+			else if (c === "}" && depth > 0) depth--;
+			else if (c === m[1]) return true;
+		}
+		F_OPEN.lastIndex = i;
 	}
 	return false;
+}
+
+/** Whether any line of a YAML patch, context included, ends in a block scalar header. */
+export function hasBlockScalarHeader(filename: string, patch: string): boolean {
+	return (
+		LINE_MODE.has(extensionOf(filename)) &&
+		patch.split("\n").some((row) => BLOCK_SCALAR.test(row.trimEnd()))
+	);
 }
 
 function unreadable(line: string, ext: string): boolean {
@@ -459,15 +469,13 @@ function sameTokens(a: string[], b: string[]): boolean {
 
 /**
  * Whether two blocks hold the same token stream once formatting-only differences are
- * removed, written independently of the matcher's tokenizer. Only the families listed in
- * `CHECKER_FAMILIES` are accepted, and both files must share one. Refused: comments,
- * templates, triple-quoted strings, heredocs, possible regex literals, odd line terminators
- * or non-ASCII spaces, HTML-like comment markers, nested same-quote f-strings, lines over
- * 2,000 characters, JSX-capable files, YAML block scalars and trailing whitespace
- * differences, unbalanced brackets and nesting over 200 deep. A line break in a JS or TS
- * file counts as a difference unless it is obviously a wrap. Indentation-sensitive files
- * must indent with spaces only and keep the same relative indentation; `reindent` is the
- * uniform shift of the head block against the base block (0 elsewhere).
+ * removed, written independently of the matcher's tokenizer. Only `CHECKER_FAMILIES` are
+ * accepted, and both files must share one. Comments, templates, triple-quoted strings,
+ * heredocs, possible regex literals, odd terminators or spaces, nested f-strings, long
+ * lines, JSX-capable files, YAML scalars, unbalanced or deep brackets and JS or TS line
+ * breaks that are not obviously a wrap are differences. Indentation-sensitive files must
+ * indent with spaces only and keep the same relative indentation; `reindent` is the shift
+ * of the head block against the base block (0 elsewhere).
  */
 export function tokenEquivalent(
 	baseLines: string[],

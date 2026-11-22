@@ -1675,13 +1675,6 @@ describe("verifyRelocation through the token path", () => {
 
 	it("refuses a token-equivalent claim that also lists a divergence", () => {
 		const { files, op } = reformat();
-		const at = (filename: string, side: "base" | "head", line: number) => ({
-			filename,
-			side,
-			startLine: line,
-			endLine: line,
-			shown: "full" as const,
-		});
 		const listed: Operation = {
 			...op,
 			exact: false,
@@ -1690,8 +1683,8 @@ describe("verifyRelocation through the token path", () => {
 				{
 					kind: "changed",
 					class: "code",
-					base: at("src/a.ts", "base", 10),
-					head: at("src/b.ts", "head", 10),
+					base: op.from[0],
+					head: { ...(op.to[0] as Span), endLine: 10 },
 					original: BASE[0] as string,
 				},
 			],
@@ -1719,6 +1712,35 @@ describe("verifyRelocation through the token path", () => {
 		expect(verifyRelocation(claim({ reindent: 2 }), files)).toBe(false);
 	});
 
+	it("refuses a shifted YAML claim when a context line has a scalar header", () => {
+		const block = [
+			"server:",
+			"  host: example.com",
+			"  port: 8080",
+			"  tls: true",
+			"  retries: 3",
+			"  timeout: 30",
+		];
+		const claim = (context: string) =>
+			verifyRelocation(
+				{
+					...lineClaim("a/a.yml", 10, 15, "a/b.yml", 10, 15),
+					shape: { reindent: 2 },
+				},
+				[
+					patched("a/a.yml", "-", context, block),
+					patched(
+						"a/b.yml",
+						"+",
+						context,
+						block.map((l) => `  ${l}`),
+					),
+				],
+			);
+		expect(claim("x: 1")).toBe(true);
+		expect(claim("script: |2")).toBe(false);
+	});
+
 	it("refuses a whitespace-only pair when one line holds a carriage return", () => {
 		const line = "return alpha_value + beta_value + gamma_value;";
 		const claim = (base: string) =>
@@ -1728,5 +1750,23 @@ describe("verifyRelocation through the token path", () => {
 			]);
 		expect(claim(line.replace("return ", "return   "))).toBe(true);
 		expect(claim(line.replace("return ", "return\r "))).toBe(false);
+	});
+});
+
+describe("verifyRelocation shape on positional claims", () => {
+	const py = Array.from(
+		{ length: 6 },
+		(_, i) => `    v${i} = compute(${i}, offset)`,
+	);
+	it.each([
+		["src/a.ts", "src/b.ts", fn(body(20))],
+		["a/old.py", "a/new.py", ["def run(offset):", ...py]],
+	])("drops a forged shift on a clean move of %s", (from, to, block) => {
+		const { files, op } = relocation(block, block, [from, to]);
+		expect(verifyRelocation(op, files)).toBe(true);
+		for (const reindent of [4, -2])
+			expect(verifyRelocation({ ...op, shape: { reindent } }, files)).toBe(
+				false,
+			);
 	});
 });

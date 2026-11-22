@@ -1,6 +1,7 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
 import { hasBrokenContinuation, hasOddBreak } from "./lexical.js";
 import {
+	hasBlockScalarHeader,
 	jsxPossible,
 	opensUnclosedString,
 	tokenEquivalent,
@@ -174,7 +175,8 @@ function scanPatch(patch: string | undefined, filename: string): ParsedPatch {
 		risky:
 			LITERAL_OPENER.test(patch ?? "") ||
 			opensUnclosedString(filename, patch ?? "") ||
-			unbalancedBlockComment(filename, patch ?? ""),
+			unbalancedBlockComment(filename, patch ?? "") ||
+			hasBlockScalarHeader(filename, patch ?? ""),
 		jsx: jsxPossible(filename, patch ?? ""),
 	};
 	const scanned: Scanned[] = [];
@@ -675,7 +677,7 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 			unclaimed(head, headSpent),
 		)
 	)
-		return true;
+		return (op.shape?.reindent ?? 0) === 0;
 	return op.divergences.length === 0 && tokenVerified(op, base, head, index);
 }
 

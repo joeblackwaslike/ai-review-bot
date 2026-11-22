@@ -3,6 +3,7 @@ import { acceptSeed } from "./acceptance.js";
 import type { WorkBudget } from "./budget.js";
 import { literalSafe, relativeIndent } from "./lexical.js";
 import {
+	BLOCK_SCALAR,
 	newlineClass,
 	normalizeTokens,
 	opaqueLine,
@@ -560,7 +561,7 @@ function mayHoldJsx(file: PushFile): boolean {
 /**
  * Names of the files the token pass leaves to the line matcher: those whose visible patch
  * text holds a backtick, a triple quote, a heredoc opener or a line that opens a string
- * it does not close, a block comment that is unbalanced or holds a changed line, and JSX-capable files, where whitespace, commas and quotes in text
+ * it does not close, a YAML block scalar header, a block comment that is unbalanced or holds a changed line, and JSX-capable files, where whitespace, commas and quotes in text
  * are content.
  */
 export function filesWithLiterals(files: PushFile[]): Set<string> {
@@ -570,6 +571,10 @@ export function filesWithLiterals(files: PushFile[]): Set<string> {
 				(f) =>
 					LITERAL_OPENER.test(f.patch ?? "") ||
 					mayHoldJsx(f) ||
+					(LINE_MODE.has(extension(f.filename)) &&
+						(f.patch ?? "")
+							.split("\n")
+							.some((row) => BLOCK_SCALAR.test(row.trimEnd()))) ||
 					opensUnclosedString(f) ||
 					(COMMENTED_EXTENSIONS.has(extension(f.filename)) &&
 						blockCommentHazard(f.patch ?? "")),

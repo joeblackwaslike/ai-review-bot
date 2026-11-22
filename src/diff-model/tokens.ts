@@ -64,11 +64,8 @@ export function operatorsFor(ext: string): readonly string[] {
 const FREE_EXTENSIONS = new Set("js ts jsx tsx mjs cjs".split(" "));
 const SLASH_COMMENT_EXTENSIONS = new Set("js ts jsx tsx mjs cjs go".split(" "));
 const SIBLING_COMMA_EXTENSIONS = new Set("py pyi go".split(" "));
-const BLOCK_SCALAR = /[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$/;
-const F_PREFIX_DQ = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)"/u;
-const F_PREFIX_SQ = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)'/u;
-const NEST_DQ = /\{[^{}]*"/;
-const NEST_SQ = /\{[^{}]*'/;
+export const BLOCK_SCALAR = /[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$/;
+const F_OPEN = /(?<![\p{L}\p{N}_])(?:[rR][fF]|[fF][rR]?)(["'])/gu;
 const JS_FAMILY = new Set("js ts jsx tsx mjs cjs".split(" "));
 const QUOTE_SWAP_EXTENSIONS = new Set("js ts mjs cjs py pyi".split(" "));
 const PYTHON_FILE = /\.pyi?$/i;
@@ -137,9 +134,9 @@ function extension(filename: string): string {
 }
 
 /**
- * Whether a line holds text the token pass cannot compare reliably: over the analysis cap,
- * an odd line terminator or non-ASCII whitespace other than one trailing carriage return,
- * an HTML-like comment marker in a JS-family file, or a nested Python f-string quote.
+ * Whether a line cannot be compared reliably: over the analysis cap, holding an odd line
+ * terminator or non-ASCII space, an HTML-like comment marker (JS family) or a nested
+ * Python f-string quote.
  */
 export function opaqueLine(line: string, filename: string): boolean {
 	if (line.length > MAX_ANALYZED_LINE) return true;
@@ -151,13 +148,19 @@ export function opaqueLine(line: string, filename: string): boolean {
 }
 
 function nestsFStringQuote(line: string): boolean {
-	for (const [prefix, nested] of [
-		[F_PREFIX_DQ, NEST_DQ],
-		[F_PREFIX_SQ, NEST_SQ],
-	] as const) {
-		const found = prefix.exec(line);
-		if (found && nested.test(line.slice(found.index + found[0].length)))
-			return true;
+	F_OPEN.lastIndex = 0;
+	for (let m = F_OPEN.exec(line); m; m = F_OPEN.exec(line)) {
+		let depth = 0;
+		let i = m.index + m[0].length;
+		for (; i < line.length && (line[i] !== m[1] || depth > 0); i++) {
+			const c = line[i];
+			if (c === "\\") i++;
+			else if (c === "{") depth++;
+			else if (c === "}" && depth > 0) depth--;
+			else if (c === m[1]) return true;
+		}
+		if (i >= line.length && depth > 0) return true;
+		F_OPEN.lastIndex = i;
 	}
 	return false;
 }
@@ -263,12 +266,10 @@ function scanLine(line: string, filename: string): string[] {
 
 /**
  * Splits source lines into tokens (identifiers, numbers, whole strings, longest-match
- * operators), dropping comments. `lineOf[k]` is the index in `lines` of token `k`. A JS or TS
- * file keeps a "\n" token between lines unless the break is obviously a wrap (the previous
- * token opens, separates or continues an expression, or the next one closes or continues
- * it), and always after a restricted-production keyword or before a statement-continuing
- * line under automatic semicolon insertion. Significant files emit a "\n" token between
- * logical lines (grouped by bracket depth).
+ * operators), dropping comments. `lineOf[k]` is the index in `lines` of token `k`. A JS or
+ * TS file keeps a "\n" token between lines unless the break is obviously a wrap, and always
+ * after a restricted-production keyword or before an ASI hazard. Significant files emit a
+ * "\n" between logical lines (grouped by bracket depth).
  */
 export function tokenize(
 	lines: readonly string[],
