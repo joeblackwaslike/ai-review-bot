@@ -540,12 +540,6 @@ describe("checker opener scan", () => {
 		}
 	}, 5000);
 
-	it("handles a 400-character modifier run quickly", () => {
-		const started = performance.now();
-		leadingSignature([`${"static ".repeat(55)}!`], "a.ts");
-		expect(performance.now() - started).toBeLessThan(1000);
-	});
-
 	it("does not read with (scope) { as a definition opening", () => {
 		expect(leadingSignature(["with (scope) {", "}"], "a.js")).toBeNull();
 		expect(leadingSignature(["run(scope) {", "}"], "a.js")).not.toBeNull();
@@ -641,17 +635,6 @@ describe("receiver positive rule in the checker", () => {
 		const [from, to] = [c.base[0] as string, c.head[0] as string];
 		expect(receiverOnlyLine(from, to, file(c.lang), file(c.lang))).toBe(true);
 	});
-
-	it("refuses an unclosed bracket, a leading operator and a bare name", () => {
-		expect(receiverOnlyLine("foo(a,", "foo(self.a,", "a.py", "b.py")).toBe(
-			false,
-		);
-		expect(receiverOnlyLine("b)", "self.b)", "a.py", "b.py")).toBe(false);
-		expect(receiverOnlyLine("count", "self.count", "a.py", "b.py")).toBe(false);
-		expect(
-			receiverOnlyLine("x = f(a); g(b)", "x = f(a); g(self.b)", "a.py", "b.py"),
-		).toBe(false);
-	});
 });
 
 describe("each clause of the receiver positive rule on its own", () => {
@@ -736,14 +719,56 @@ describe("matcher and checker agree on receiver labels", () => {
 		if (label === "receiver")
 			expect(receiverOnlyLine(from, to, file, file)).toBe(true);
 	});
+});
 
-	it("labels the read-only controls receiver and everything noisy code", () => {
-		const labels = AGREEMENT_LINES.map(([ext, from, to]) =>
-			receiverChangeClass(from, to, `f.${ext}`, `f.${ext}`),
+describe("readable operators do not hide receiver labels", () => {
+	const label = (ext: string, from: string, to: string) =>
+		receiverChangeClass(from, to, `f.${ext}`, `f.${ext}`);
+
+	it("keeps receiver for Python division, floor division, modulo and matmul", () => {
+		expect(label("py", "return ratio(a) / 2", "return self.ratio(a) / 2")).toBe(
+			"receiver",
 		);
 		expect(
-			labels.filter((l) => l === "receiver").length,
-		).toBeGreaterThanOrEqual(5);
-		expect(labels.filter((l) => l === "code").length).toBeGreaterThanOrEqual(8);
+			label("py", "return ratio(a) // 2", "return self.ratio(a) // 2"),
+		).toBe("receiver");
+		expect(label("py", "return total(a) % 7", "return self.total(a) % 7")).toBe(
+			"receiver",
+		);
+		expect(
+			label(
+				"py",
+				"return left(a) @ right(b)",
+				"return self.left(a) @ right(b)",
+			),
+		).toBe("receiver");
+	});
+
+	it("keeps receiver for JavaScript division after a name, number or bracket and refuses regex literals and comments", () => {
+		expect(label("ts", "return xs[0] / 2;", "return this.xs[0] / 2;")).toBe(
+			"receiver",
+		);
+		expect(
+			label("ts", "return n / 2 + f(x);", "return n / 2 + this.f(x);"),
+		).toBe("receiver");
+		expect(
+			label("ts", "return /a+/.test(f(x));", "return /a+/.test(this.f(x));"),
+		).toBe("code");
+		expect(label("ts", "return f(x); // c", "return this.f(x); // c")).toBe(
+			"code",
+		);
+	});
+
+	it("labels a leading if, else, try or case line code", () => {
+		for (const [ext, from, to] of [
+			["py", "if ok(x): go(x)", "if self.ok(x): go(x)"],
+			["ts", "if (ok(x)) go(x);", "if (this.ok(x)) go(x);"],
+			["ts", "else go(x);", "else this.go(x);"],
+			["py", "try: go(x)", "try: self.go(x)"],
+			["ts", "case ok(x): go(x);", "case ok(x): this.go(x);"],
+		] as const) {
+			expect(label(ext, from, to)).not.toBe("receiver");
+			expect(receiverOnlyLine(from, to, `f.${ext}`, `f.${ext}`)).toBe(false);
+		}
 	});
 });

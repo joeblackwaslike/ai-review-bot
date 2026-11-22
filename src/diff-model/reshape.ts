@@ -56,7 +56,7 @@ const FUNCTION_KEYWORD =
 	/^\s*(?:(?:export|default|async|public|private|protected|static)\s+)*function\b/;
 const METHOD = /^\s*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
 const NOT_READ_ONLY = new Set(
-	"for while del delete as in of with lambda global nonlocal yield import from class def function ++ -- { }".split(
+	"for while del delete as in of with lambda global nonlocal yield import from class def function if else elif try except finally switch case default ++ -- { }".split(
 		" ",
 	),
 );
@@ -76,12 +76,17 @@ const NOT_PLAIN = new RegExp(
 		"<<",
 		"<!--",
 		"-->",
-		"/",
-		"#",
 		"[\\r\\v\\f]",
 		"\\b[rR]?[fF][rR]?[\"']",
 	].join("|"),
 	"u",
+);
+const QUOTED = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g;
+const JS_FAMILY = new Set(["js", "mjs", "cjs", "ts"]);
+const EXPECTS_EXPRESSION = new Set(
+	"return typeof case in of delete void throw yield await else do instanceof new default".split(
+		" ",
+	),
 );
 const JSX_TEXT = /<[A-Za-z][\w.-]*[\s>/]|<\/|\/>|<>/;
 const CONTINUATION =
@@ -281,7 +286,29 @@ function plainLine(raw: string, filename: string): boolean {
 	if (raw.length > MAX_RECEIVER_LINE || NOT_PLAIN.test(raw)) return false;
 	const ext = extension(filename);
 	if (ext === "jsx" || ext === "tsx") return false;
+	const code = raw.replace(QUOTED, '""');
+	if (PYTHON.has(ext)) return !code.includes("#");
+	if (JS_FAMILY.has(ext) && !slashesReadable(code)) return false;
 	return !(["js", "mjs", "cjs"].includes(ext) && JSX_TEXT.test(raw));
+}
+
+/**
+ * Whether every `/` of a JavaScript or TypeScript line (strings already blanked) is a
+ * division, which the checker reads, and not a comment opener or a possible regex literal.
+ * A slash divides only after a number, `]` or a name that is not a keyword that expects an
+ * expression next.
+ */
+function slashesReadable(code: string): boolean {
+	for (let i = code.indexOf("/"); i >= 0; i = code.indexOf("/", i + 1)) {
+		if (code[i + 1] === "/" || code[i + 1] === "*") return false;
+		const before = code.slice(0, i).trimEnd();
+		const last = before.at(-1);
+		if (last === undefined) return false;
+		if (last === "]" || /\d/.test(last)) continue;
+		const word = /[\p{L}_$][\p{L}\p{N}_$]*$/u.exec(before)?.[0];
+		if (word === undefined || EXPECTS_EXPRESSION.has(word)) return false;
+	}
+	return true;
 }
 
 /** Whether a block cannot hold JSX, which the checker refuses to read. */

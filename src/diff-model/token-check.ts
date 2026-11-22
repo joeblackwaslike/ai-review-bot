@@ -588,7 +588,7 @@ const METHOD_DEFINITION =
 	/^\s*(?:[\w$.<>,?[\]]+\s+)*[A-Za-z_$][\w$]*\s*(?:<[^>()]*>)?\(/;
 const MAX_OPENER_LINE = 400;
 const BINDING_WORD =
-	/^(?:for|while|del|delete|as|in|of|with|lambda|global|nonlocal|yield|import|from|class|def|function|\+\+|--|\{|\})$/;
+	/^(?:for|while|del|delete|as|in|of|with|lambda|global|nonlocal|yield|import|from|class|def|function|if|else|elif|try|except|finally|switch|case|default|\+\+|--|\{|\})$/;
 const CONTINUES_STATEMENT =
 	/^(?:[-=.[(?:,+*/%&|^<>!~]|(?:and|or|if|else|in|is|not|for)(?![\w$]))/;
 const NAME_START = /^[\p{L}_$]/u;
@@ -730,8 +730,11 @@ function readsOnly(
 }
 
 function startsContinuation(lines: readonly string[], at: number): boolean {
-	const next = lines.slice(at + 1).find((l) => l.trim() !== "");
-	return next !== undefined && CONTINUES_STATEMENT.test(next.trim());
+	for (let n = at + 1; n < lines.length; n++) {
+		const next = (lines[n] as string).trim();
+		if (next !== "") return CONTINUES_STATEMENT.test(next);
+	}
+	return false;
 }
 
 interface Depths {

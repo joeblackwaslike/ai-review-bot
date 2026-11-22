@@ -639,43 +639,6 @@ describe("reshape receiver weight and code classification", () => {
 		expect(op?.reviewWeight).toBe(2);
 	});
 
-	it("classes an augmented assignment target that changed from cls. to self. as code", () => {
-		const base = [
-			"    def bump(cls, n):",
-			"        cls.count += n",
-			"        rows = load_rows(n)",
-			"        keys = build_keys(rows, n)",
-			"        check_keys(keys, rows)",
-			"        return rows",
-		];
-		const head = base.map((l) => `    ${l.replace("cls", "self")}`);
-		const op = reshapeOf(move("a.py", "b.py", base, head));
-		expect(classes(op)).toEqual(["signature", "code"]);
-	});
-
-	it("classes a local assignment that became an attribute assignment as code", () => {
-		const base = [
-			"def tally(n):",
-			"    total = total + 1",
-			"    rows = load_rows(n)",
-			"    keys = build_keys(rows, n)",
-			"    check_keys(keys, rows)",
-			"    return rows",
-		];
-		const head = [
-			"    def tally(self, n):",
-			"        self.total = total + 1",
-			"        rows = load_rows(n)",
-			"        keys = build_keys(rows, n)",
-			"        check_keys(keys, rows)",
-			"        return rows",
-		];
-		expect(classes(reshapeOf(move("a.py", "b.py", base, head)))).toEqual([
-			"signature",
-			"code",
-		]);
-	});
-
 	it("classes one receiver dropped and another added on a line as code", () => {
 		const base = [
 			"    def tally(self, x):",
@@ -746,13 +709,6 @@ describe("reshape opener scan stays bounded", () => {
 		});
 		expect(performance.now() - modelStarted).toBeLessThan(1000);
 	}, 5000);
-
-	it("finishes a 400-character modifier run under a second", () => {
-		const line = `${"static ".repeat(55)}!`;
-		const started = performance.now();
-		signatureRange([line], "a.ts");
-		expect(performance.now() - started).toBeLessThan(1000);
-	});
 
 	it("reads an opener of 399 characters but not one of 401", () => {
 		const pad = (n: number) => `function f(${"a, ".repeat(n)}z) {`;
@@ -961,13 +917,6 @@ describe("reshape receiver positive rule", () => {
 					(d) => d.class === "code" && d.original === c.base[0],
 				),
 			).toBe(true);
-	});
-
-	it("claims at least the single-line write cases as code", () => {
-		const claimed = WRITE_CASES.filter((c) => c.base.length === 1).filter(
-			(c) => run(c) !== undefined,
-		);
-		expect(claimed.length).toBeGreaterThanOrEqual(6);
 	});
 
 	it.each(

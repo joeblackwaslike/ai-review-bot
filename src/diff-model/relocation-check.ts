@@ -703,6 +703,20 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 		: false;
 }
 
+const positionIndexes = new WeakMap<number[], Map<number, number>>();
+
+function positionAt(positions: number[], line: number): number {
+	let index = positionIndexes.get(positions);
+	if (!index) {
+		index = new Map();
+		positions.forEach((p, at) => {
+			if (!index?.has(p)) index?.set(p, at);
+		});
+		positionIndexes.set(positions, index);
+	}
+	return index.get(line) ?? -1;
+}
+
 function receiverLineHolds(
 	divergence: Divergence,
 	base: Side[],
@@ -713,8 +727,8 @@ function receiverLineHolds(
 	const baseSide = base.find((s) => s.filename === from.filename);
 	const headSide = head.find((s) => s.filename === to.filename);
 	if (!baseSide || !headSide) return false;
-	const baseAt = baseSide.positions.indexOf(from.startLine);
-	const headAt = headSide.positions.indexOf(to.startLine);
+	const baseAt = positionAt(baseSide.positions, from.startLine);
+	const headAt = positionAt(headSide.positions, to.startLine);
 	if (baseAt < 0 || headAt < 0) return false;
 	return receiverLineInContext(
 		baseSide.lines,

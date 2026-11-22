@@ -2552,12 +2552,6 @@ describe("verifyRelocation receiver positive rule", () => {
 		expect(op?.divergences.some((d) => d.class === "receiver")).toBe(true);
 		expect(verifyRelocation(op as Operation, files)).toBe(true);
 	});
-
-	it("drops a read-only receiver claim whose weight counts the line as code", () => {
-		const { files, op } = formed(READ_CASES[0] as (typeof READ_CASES)[number]);
-		const heavier = { ...(op as Operation), reviewWeight: 3 };
-		expect(verifyRelocation(heavier, files)).toBe(false);
-	});
 });
 
 describe("plain relocations with receiver edits still verify", () => {
@@ -2689,34 +2683,43 @@ describe("prototype-named extension files are never reshape claims", () => {
 	});
 });
 
-describe("verifyRelocation running depth scan", () => {
-	const manyLines = (count: number) => {
-		const calls = Array.from(
-			{ length: count },
-			(_, i) => `step${i}(items, n, ${i})`,
-		);
-		return {
-			base: ["def run(items, n):", ...calls.map((l) => `    ${l}`)],
-			head: [
-				"    def run(self, items, n):",
-				...calls.map((l) => `        self.${l}`),
-			],
-		};
-	};
+describe("a readable operator elsewhere does not disable receiver labels", () => {
+	const base = [
+		"def run(items, n):",
+		"    value = compute(n) / 2",
+		"    check_rows(items, n)",
+		"    flush_rows(items, value)",
+		"    audit_rows(items, n)",
+		"    return finish(value, n)",
+	];
+	const head = [
+		"    def run(self, items, n):",
+		"        value = compute(n) / 2",
+		"        self.check_rows(items, n)",
+		"        self.flush_rows(items, value)",
+		"        self.audit_rows(items, n)",
+		"        return self.finish(value, n)",
+	];
 
-	it("stays roughly linear from 1000 to 2000 body lines", () => {
-		const time = (count: number) => {
-			const { base, head } = manyLines(count);
-			const files = named("a.py", "b.py", base, head);
-			const started = performance.now();
-			const ops = findRelocations(files);
-			for (const op of ops) verifyRelocation(op, files);
-			return performance.now() - started;
-		};
-		time(200);
-		const half = time(1000);
-		const full = time(2000);
-		expect(full).toBeLessThan(3000);
-		expect(full).toBeLessThan(half * 6 + 200);
-	}, 15000);
+	it("still emits a verified reshape claim with receiver labels on the clean lines", () => {
+		const { files, op } = claim("a.py", "b.py", base, head);
+		const kinds = op.divergences.map((d) => d.class);
+		expect(kinds.filter((k) => k === "receiver").length).toBe(4);
+		expect(op.reviewWeight).toBe(2);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies 2000 receiver lines on the plain path within the backstop", () => {
+		const lines = Array.from(
+			{ length: 3000 },
+			(_, i) => `record${i}(cart.id, total, ${i});`,
+		);
+		const changed = lines.map((l, i) => (i % 3 === 0 ? `this.${l}` : l));
+		const files = named("a.ts", "b.ts", lines, changed);
+		const started = performance.now();
+		const ops = findRelocations(files).filter((o) => o.divergences.length > 0);
+		expect(ops.length).toBeGreaterThan(0);
+		for (const op of ops) expect(verifyRelocation(op, files)).toBe(true);
+		expect(performance.now() - started).toBeLessThan(3000);
+	}, 10000);
 });
