@@ -1,3 +1,5 @@
+import { MAX_ANALYZED_LINE } from "./lexical.js";
+
 export type NewlineClass = "free" | "significant";
 
 export const OPERATORS: readonly string[] = [
@@ -75,9 +77,24 @@ const BREAK_KEYWORDS = new Set([
 	"break",
 	"continue",
 	"yield",
+	"async",
+	"type",
+	"declare",
+	"abstract",
+	"namespace",
+	"module",
+	"interface",
+	"enum",
+	"get",
+	"set",
+	"static",
+	"let",
+	"await",
 ]);
+const ODD_BREAK = /[\r\v\f\u0085\u2028\u2029]/;
+const HTML_COMMENT = /<!--|-->/;
 const IDENTIFIER = /[\p{L}_$][\p{L}\p{N}_$]*/uy;
-const NUMBER = /\d(?:\w|\.(?=\d))*/y;
+const NUMBER = /0[xXoObB]\w*|\d[\d_]*(?:\.(?!\.)[\d_]*)?(?:[eE][+-]?\d+)?\w*/y;
 const OPENERS = new Set(["(", "[", "{"]);
 const CLOSERS = new Set([")", "]", "}"]);
 const GROUPERS = new Set(["(", "["]);
@@ -89,6 +106,18 @@ const EMPTY_BODY_KEYWORDS = new Set(["if", "for", "while", "switch"]);
 function extension(filename: string): string {
 	const dot = filename.lastIndexOf(".");
 	return dot < 0 ? "" : filename.slice(dot + 1).toLowerCase();
+}
+
+/**
+ * Whether a line holds text the token pass cannot compare reliably: a line over the analysis
+ * cap, a carriage return, vertical tab, form feed or Unicode line break anywhere but as one
+ * trailing carriage return, or an HTML-like comment marker in a JS-family file.
+ */
+export function opaqueLine(line: string, filename: string): boolean {
+	if (line.length > MAX_ANALYZED_LINE) return true;
+	const text = line.endsWith("\r") ? line.slice(0, -1) : line;
+	if (ODD_BREAK.test(text)) return true;
+	return JS_FAMILY.has(extension(filename)) && HTML_COMMENT.test(text);
 }
 
 /** Whether line breaks carry no meaning in this file's language. */
@@ -189,7 +218,8 @@ export function tokenize(
 	const lineOf: number[] = [];
 	let depth = 0;
 	lines.forEach((line, index) => {
-		const found = scanLine(line, filename);
+		const found =
+			line.length > MAX_ANALYZED_LINE ? [line] : scanLine(line, filename);
 		const first = found[0];
 		if (
 			jsFamily &&

@@ -29,7 +29,11 @@ const PYTHON = words("py pyi");
 const INDENTED = words("py pyi yml yaml");
 const SIBLING_COMMA = words("py pyi go rs kt kts dart");
 const QUOTE_SWAP = words("js mjs cjs ts py pyi");
-const BREAKING_WORDS = words("return throw break continue yield");
+const BREAKING_WORDS = words(
+	"return throw break continue yield async type declare abstract namespace module interface enum get set static let await",
+);
+const MAX_LINE = 2000;
+const ODD_BREAKS = /[\r\v\f\u0085\u2028\u2029]/;
 const BEFORE_EXPRESSION = words(
 	"return typeof case in of delete void throw yield await else do instanceof new",
 );
@@ -43,7 +47,7 @@ const OPENING = new Map([
 const CLOSING = new Set(OPENING.values());
 const UNSAFE_TEXT = /`|"""|'''|<<[-~]?\s*['"]?\w/;
 const IDENTIFIER = /[\p{L}_$][\p{L}\p{N}_$]*/uy;
-const NUMBER = /\d(?:\w|\.(?=\d))*/y;
+const NUMBER = /0[xXoObB]\w*|\d[\d_]*(?:\.(?!\.)[\d_]*)?(?:[eE][+-]?\d+)?\w*/y;
 const STRING_PREFIX = /^[rbfuRBFU]{1,2}$/;
 const STATEMENT_END = /^(?:[\p{L}\p{N}_$"'`]|\)|\]|\}|\+\+|--)/u;
 const CONTROL_WORD = /\b(?:if|while|for|with)\b/;
@@ -56,6 +60,13 @@ interface Tokenized {
 function extensionOf(filename: string): string {
 	const dot = filename.lastIndexOf(".");
 	return dot < 0 ? "" : filename.slice(dot + 1).toLowerCase();
+}
+
+function unreadable(line: string, ext: string): boolean {
+	if (line.length > MAX_LINE) return true;
+	const body = line.endsWith("\r") ? line.slice(0, -1) : line;
+	if (ODD_BREAKS.test(body)) return true;
+	return JS_LIKE.has(ext) && (body.includes("<!--") || body.includes("-->"));
 }
 
 function stringEnd(line: string, start: number): number {
@@ -285,6 +296,9 @@ export function tokenEquivalent(
 	const family = FAMILY_OF.get(ext);
 	if (family === undefined || family !== FAMILY_OF.get(extensionOf(headFile)))
 		return no;
+	const headExt = extensionOf(headFile);
+	if (baseLines.some((l) => unreadable(l, ext))) return no;
+	if (headLines.some((l) => unreadable(l, headExt))) return no;
 	const lineMode = LINE_MODE.has(ext);
 	const base = lineMode
 		? lineModeTokens(baseLines)

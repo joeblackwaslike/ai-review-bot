@@ -2,7 +2,12 @@ import type { Candidate, PushFile, Run } from "../moved-blocks.js";
 import { acceptSeed } from "./acceptance.js";
 import type { WorkBudget } from "./budget.js";
 import { literalSafe, relativeIndent } from "./lexical.js";
-import { newlineClass, normalizeTokens, tokenize } from "./tokens.js";
+import {
+	newlineClass,
+	normalizeTokens,
+	opaqueLine,
+	tokenize,
+} from "./tokens.js";
 import type { Operation, Span } from "./types.js";
 
 const WINDOW = 8;
@@ -149,6 +154,7 @@ function buildSegment(
 			);
 	}
 	if (!lineOf) return null;
+	bad = bad.map((b, l) => b || opaqueLine(lines[l] as string, run.filename));
 	const firstToken = lines.map(() => Number.POSITIVE_INFINITY);
 	const lastToken = lines.map(() => -1);
 	tokens.forEach((token, k) => {

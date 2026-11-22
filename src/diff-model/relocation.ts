@@ -12,6 +12,7 @@ import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
 import { type BudgetLimits, WorkBudget } from "./budget.js";
 import { findDeclarationMoves } from "./declarations.js";
 import {
+	hasOddBreak,
 	lexicallySafe,
 	MAX_ANALYZED_LINE,
 	normalizeSafe,
@@ -175,7 +176,7 @@ function backtickCount(line: string): number {
 function riskyLines(filename: string, lines: string[]): boolean[] {
 	if (
 		isIndentSensitive(filename) ||
-		lines.some((l) => HEREDOC_OR_TRIPLE.test(l))
+		lines.some((l) => HEREDOC_OR_TRIPLE.test(l) || hasOddBreak(l))
 	)
 		return lines.map(() => true);
 	let inside = false;

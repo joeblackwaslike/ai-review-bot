@@ -2,6 +2,12 @@ import { isIndentSensitive, normalizeCodeLine } from "../moved-blocks.js";
 
 const UNSAFE_LEXEME = /`|"""|'''|<</;
 const BROKEN_CONTINUATION = /\\\s+$/;
+const ODD_BREAK = /[\r\v\f\u0085\u2028\u2029]/;
+
+/** Whether a line holds a carriage return, vertical tab, form feed or Unicode line break anywhere but as one trailing carriage return. */
+export function hasOddBreak(line: string): boolean {
+	return ODD_BREAK.test(line.endsWith("\r") ? line.slice(0, -1) : line);
+}
 
 /** Whether trailing whitespace after a backslash would break a line continuation. */
 export function hasBrokenContinuation(line: string): boolean {
@@ -20,7 +26,10 @@ export function lexicallySafe(
 	return (
 		!isIndentSensitive(filename) &&
 		!lines.some(
-			(line) => UNSAFE_LEXEME.test(line) || hasBrokenContinuation(line),
+			(line) =>
+				UNSAFE_LEXEME.test(line) ||
+				hasBrokenContinuation(line) ||
+				hasOddBreak(line),
 		)
 	);
 }

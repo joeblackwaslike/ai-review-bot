@@ -1,5 +1,5 @@
 import { isIndentSensitive, type PushFile } from "../moved-blocks.js";
-import { hasBrokenContinuation } from "./lexical.js";
+import { hasBrokenContinuation, hasOddBreak } from "./lexical.js";
 import { tokenEquivalent } from "./token-check.js";
 import type { Divergence, Operation, Span } from "./types.js";
 
@@ -412,7 +412,8 @@ function pairsUp(base: Entry, head: Entry): boolean {
 	const safe = (entry: Entry) =>
 		!entry.inLiteral &&
 		!entry.indentSensitive &&
-		!hasBrokenContinuation(entry.text);
+		!hasBrokenContinuation(entry.text) &&
+		!hasOddBreak(entry.text);
 	return (
 		safe(base) && safe(head) && interior(base.text) === interior(head.text)
 	);
