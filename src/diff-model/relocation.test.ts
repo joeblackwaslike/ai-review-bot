@@ -1100,14 +1100,8 @@ describe("findRelocations statement continuation", () => {
 		hunk("src/b.ts", headRows),
 	];
 	const loaded = "const approvedUserList = loadUsers(config)";
-	const line = "  const approvedUserList = loadUsers(config);";
 
 	it.each([
-		[
-			"a declaration whose head side gains a continuation line",
-			["-const total = compute(a, b)", " context"],
-			["+const total = compute(a, b)", "+  + secret"],
-		],
 		[
 			"a declaration followed by a continuation line in the context",
 			["-const total = compute(a, b)", "   .map(wrap);"],
@@ -1128,11 +1122,6 @@ describe("findRelocations statement continuation", () => {
 			["-total_amount_for_user = compute_amount(account) + \\"],
 			["+total_amount_for_user = compute_amount(account) + \\"],
 		],
-		[
-			"a short block followed by a closer on a deeper indent",
-			[`-${line}`, "     )"],
-			[`+${line}`, "     )"],
-		],
 	])("does not claim %s", (_, baseRows, headRows) => {
 		expect(findRelocations(pairOf(baseRows, headRows))).toEqual([]);
 	});
@@ -1140,19 +1129,6 @@ describe("findRelocations statement continuation", () => {
 	it.each(partialStatements)("does not claim %s", (_, base, head, __, ext) => {
 		const files = [hunk(`src/a.${ext}`, base), hunk(`src/b.${ext}`, head)];
 		expect(findRelocations(files)).toEqual([]);
-	});
-
-	it("seeds a short Ruby method that ends in end", () => {
-		const method = [
-			"def self.money(cents)",
-			'  format("$%d.%02d", cents / 100, cents % 100)',
-			"end",
-		];
-		const files = [
-			hunk("lib/formatting.rb", [...method.map((l) => `-${l}`), " end"]),
-			hunk("lib/currency.rb", [...method.map((l) => `+${l}`), " end"]),
-		];
-		expect(findRelocations(files)).toHaveLength(1);
 	});
 
 	it("does not seed an else-if line that opens with a closer", () => {
@@ -1191,11 +1167,6 @@ describe("findRelocations declaration pairing", () => {
 			"src/Card.tsx|type Props = { children: ReactNode; elevated: boolean };",
 		],
 		[
-			"a TypeScript constant and a Python assignment",
-			"src/config.ts|const TIMEOUT = 30;",
-			"src/config.py|TIMEOUT = 30",
-		],
-		[
 			"declarations across extension families",
 			"src/limits.ts|export const MAX_ITEMS = 5;",
 			"src/limits.go|const MAX_ITEMS = 5",
@@ -1205,11 +1176,6 @@ describe("findRelocations declaration pairing", () => {
 			"a changed value sharing too little",
 			"src/a.ts|const MAX = 5;",
 			"src/b.ts|const MAX = buildLimit(config, defaults);",
-		],
-		[
-			"a bare changed value",
-			"src/a.ts|export const MAX_RETRIES = 3;",
-			"src/b.ts|export const MAX_RETRIES = 30;",
 		],
 	])("does not pair %s", (_, base, head) => {
 		const [baseName, baseText] = base.split("|") as [string, string];

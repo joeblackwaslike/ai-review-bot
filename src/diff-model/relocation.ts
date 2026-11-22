@@ -618,9 +618,8 @@ export const UNMATCHED_FILES =
  * becomes a divergence classed as comment-only, rename or code. A block that would need more
  * than 3 differing lines or 20 percent of its length is reported as its exact runs only.
  * Lines are compared raw wherever whitespace-insensitive comparison is not known to be safe.
- * One-line declarations are then paired by name (`findDeclarationMoves`). One `WorkBudget`
- * covers the call. When its pools run dry the pass stops without reporting the loss, and
- * the operations already found are returned.
+ * One-line declarations are then paired by name. One `WorkBudget` covers the call, and when
+ * its pools run dry the pass stops silently and returns what it found.
  */
 export function findRelocations(
 	files: PushFile[],

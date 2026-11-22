@@ -71,4 +71,45 @@ export const partialStatements: Case[] = [
 		"const handlerRef = makeHandlerRef(config)|(extraCall)()",
 		"(otherCall)()",
 	),
+	c(
+		"a control header",
+		"if (isUserAuthorized(currentUser))|  return grantAccess();",
+		"  return denyAccess();",
+	),
+	c(
+		"a flush control header",
+		"for (const pendingItem of pendingWorkItems)|handleItem(pendingItem);",
+		"dropItem(pendingItem);",
+	),
+	c(
+		"an open template literal",
+		"const messageTemplateText = `hello $" + "{userName}|and more`;",
+		"and less`;",
+	),
+	c(
+		"an open Python string",
+		'message_text_for_user = """hello there friend|more text"""',
+		'other text"""',
+		1,
+		"py",
+	),
+	c(
+		"a decorator",
+		"@Component({ selector: 'app-root' })|export class AppComponent {}",
+		"export class OtherComponent {}",
+	),
+	c(
+		"a Rust attribute",
+		"#[derive(Debug, Clone, PartialEq, Eq)]|struct AlphaThing {}",
+		"struct BetaThing {}",
+		1,
+		"rs",
+	),
+	c(
+		"a lone Markdown fence",
+		"```ts|const exampleValue = loadConfig(path);|```",
+		"~~~",
+		2,
+		"md",
+	),
 ];

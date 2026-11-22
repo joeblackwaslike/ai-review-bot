@@ -57,6 +57,9 @@ const CLOSING_BRACKETS = ")]}";
 const OPERATOR_ENDS = "=+*%&|^?:\\([-";
 const STATEMENT_ENDS = ";})]";
 const MOST_SITES = 50;
+const CONTROL_WORDS =
+	/^(?:if|else|elif|while|for|foreach|switch|case|when|unless|until|with|try|catch|except|finally|def|class|fn|func|function)\b/;
+const DECORATION = /^(?:@[A-Za-z_$]|#!?\[)/;
 const SIGNATURE_WORDS =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|def|fn|func|pub\s+fn|interface|enum)\b/;
 const CONTINUING_WORDS = /^(?:as|satisfies|instanceof|in)\s/;
@@ -755,8 +758,26 @@ function bracketsBalance(side: Side): boolean {
 	return depth === 0;
 }
 
+function startsConstruct(side: Side): boolean {
+	const present = side.lines.filter((l) => l.trim() !== "");
+	const last = (present[present.length - 1] ?? "").trim();
+	if (PROSE_NAME.test(side.filename))
+		return (
+			present.filter((l) => /^(?:```|~~~)/.test(l.trim())).length % 2 === 1
+		);
+	const code = side.lines.map((l) => uncommented(l, side.filename)).join("\n");
+	const unevenly = (mark: string) => code.split(mark).length % 2 === 0;
+	if (unevenly("`") || unevenly('"""') || unevenly("'''")) return true;
+	if (DECORATION.test(last)) return true;
+	return (
+		!isIndentSensitive(side.filename) &&
+		CONTROL_WORDS.test(last) &&
+		!";}".includes(last[last.length - 1] ?? "")
+	);
+}
+
 function unfinished(side: Side): boolean {
-	if (!bracketsBalance(side)) return true;
+	if (startsConstruct(side) || !bracketsBalance(side)) return true;
 	const present = side.lines.filter((l) => l.trim() !== "");
 	return (
 		isIndentSensitive(side.filename) &&
@@ -781,9 +802,10 @@ function mayContinue(side: Side): boolean {
 	const next = side.following?.trim() ?? "";
 	if (next === "") return false;
 	const deeper = indentWidth(side.following as string) > indentWidth(last);
-	if (CLOSING_BRACKETS.includes(next[0] as string)) return deeper;
+	if (deeper) return true;
+	if (CLOSING_BRACKETS.includes(next[0] as string)) return false;
 	if (beginsMidStatement(next, listy)) return true;
-	if (listy) return deeper;
+	if (listy) return false;
 	if (CONTINUING_WORDS.test(next) || "([`".includes(next[0] as string))
 		return true;
 	return (

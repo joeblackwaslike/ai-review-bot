@@ -27,6 +27,9 @@ const CONTINUING_START = /^(?:(?:as|satisfies|instanceof|in)\s|[([`])/;
 const SIGNATURE_START =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\b|class\b|def\b|fn\b|func\b|pub\s+fn\b|interface\b|enum\b)/;
 const MAX_SITES = 50;
+const CONTROL_START =
+	/^(?:if|else|elif|while|for|foreach|switch|case|when|unless|until|with|try|catch|except|finally|def|class|fn|func|function)\b/;
+const ATTRIBUTE_START = /^(?:@[A-Za-z_$]|#!?\[)/;
 const OPEN_ENDING = /(?:[=+*%&|^?:\\([-]|=>)$/;
 const IMPORT_LIKE =
 	/^(?:import\b|export\s+(?:\*|\{[^}]*\})\s*(?:as\s+\w+\s*)?(?:from\b|;|$)|from\s+\S+\s+import\b|use\s+[\w:{]|require(?:_relative)?\b|#include\b|using\s+[\w.]+\s*;|package\b)|\brequire\s*\(|\bimport\s*\(/;
@@ -208,12 +211,30 @@ function bracketsBalance(run: Run, start: number, end: number): boolean {
 	return depth === 0;
 }
 
-/**
- * True when the statement ending at line `end` of the run may carry on: its brackets do not
- * balance (a signature may end in `{`), its last line, minus a trailing comment, ends in an
- * operator, or the next line (in the run, or the context line after it) continues it. See
- * the matching v2 spec for the exact tests.
- */
+function oddCount(text: string, pattern: RegExp): boolean {
+	return (text.match(pattern) ?? []).length % 2 === 1;
+}
+
+function opensConstruct(
+	run: Run,
+	start: number,
+	end: number,
+	last: string,
+): boolean {
+	const rows = run.raw.slice(start, end);
+	if (isProseFile(run.filename))
+		return oddCount(rows.join("\n"), /^\s*(?:```|~~~)/gm);
+	const text = rows.map((row) => stripComment(row, run)).join("\n");
+	if ([/(?<!\\)`/g, /"""/g, /'''/g].some((re) => oddCount(text, re)))
+		return true;
+	const head = last.trim();
+	if (ATTRIBUTE_START.test(head)) return true;
+	return (
+		!run.indentSensitive && CONTROL_START.test(head) && !/[;}]$/.test(head)
+	);
+}
+
+/** True when the statement ending at line `end` of the run may carry on (see the matching v2 spec for the tests). */
 export function leavesStatementOpen(
 	run: Run,
 	start: number,
@@ -222,25 +243,25 @@ export function leavesStatementOpen(
 	const last = lastPresentLine(run, start, end);
 	if (last === "") return false;
 	if (!bracketsBalance(run, start, end)) return true;
+	if (opensConstruct(run, start, end, last)) return true;
 	const code = stripComment(last, run).trimEnd();
 	if (OPEN_ENDING.test(code)) return true;
 	const next = end < run.raw.length ? run.raw[end] : run.after;
 	const text = next?.trim() ?? "";
 	if (text === "") return false;
-	const deeper = indentOf(next as string) > indentOf(last);
-	if (CLOSER_START.test(text)) return deeper;
+	if (indentOf(next as string) > indentOf(last)) return true;
+	if (CLOSER_START.test(text)) return false;
 	if (startsMidStatement(text, run)) return true;
-	if (listsItems(run)) return deeper;
+	if (listsItems(run)) return false;
 	return CONTINUING_START.test(text) || !TERMINATOR.test(code);
 }
 
 /**
- * Decides whether an exact run is a block worth reporting. Five or more counted lines
- * qualify, drawing one candidate from the budget and, within one file, needing unique text.
- * One to four lines draw a candidate and their characters, and need 30 characters of
- * information (50 within one file) or a whole definition of 40, unique on each side, no
- * line over 2000 characters, no mid-statement start, no `leavesStatementOpen` on either
- * side, and different hunks within one file.
+ * Decides whether an exact run is a block worth reporting. Five or more counted lines draw
+ * one candidate (and need unique text within one file). One to four lines draw a candidate
+ * and their characters, and need 30 characters of information (50 within one file) or a
+ * whole definition of 40, uniqueness, no line over 2000 characters, no mid-statement start
+ * and `leavesStatementOpen` false on both sides.
  */
 export function acceptSeed(
 	c: Candidate,

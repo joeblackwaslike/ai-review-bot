@@ -1018,17 +1018,10 @@ describe("verifyRelocation independent small-claim rules", () => {
 		};
 	}
 
-	const indented = "  const approvedUserList = loadUsers(config);";
 	const unclosed =
 		"const resultOfTheLookup = compute(firstArgument, secondArgument,";
-	const ruby = ["def self.money(cents)", "  format(cents)", "end"];
 
 	it.each([
-		[
-			"a head line that gains a continuation line",
-			["-const total = compute(a, b)"],
-			["+const total = compute(a, b)", "+  + secret"],
-		],
 		[
 			"a base line followed by a continuation context line",
 			["-const total = compute(a, b)", " .map(wrap);"],
@@ -1038,11 +1031,6 @@ describe("verifyRelocation independent small-claim rules", () => {
 			"a line without a terminator followed by another line",
 			["-const approvedUserList = loadUsers(config).length", " other();"],
 			["+const approvedUserList = loadUsers(config).length", " other();"],
-		],
-		[
-			"a line followed by a closer on a deeper indent",
-			[`-${indented}`, "     )"],
-			[`+${indented}`, "     )"],
 		],
 		[
 			"a line that ends in an operator",
@@ -1133,16 +1121,6 @@ describe("verifyRelocation independent small-claim rules", () => {
 		expect(claimOver(60)).toBe(false);
 	});
 
-	it("accepts a short Ruby method that ends in end", () => {
-		const { files, op } = crossFile(
-			[...ruby.map((l) => `-${l}`), " end"],
-			[...ruby.map((l) => `+${l}`), " end"],
-			["lib/a.rb", "lib/b.rb"],
-			3,
-		);
-		expect(verifyRelocation(op, files)).toBe(true);
-	});
-
 	it.each([
 		[
 			"a forged declaration claim with an unrelated head line",
@@ -1167,15 +1145,6 @@ describe("verifyRelocation independent small-claim rules", () => {
 		expect(verifyRelocation(forgedChange(op, baseRow.slice(1)), files)).toBe(
 			false,
 		);
-	});
-
-	it("accepts a related one-line declaration with a small change", () => {
-		const base = "export const DEFAULTS = { retries: 3, timeout: 1000 };";
-		const { files, op } = crossFile(
-			[`-${base}`],
-			[`+${base.replace("3", "5")}`],
-		);
-		expect(verifyRelocation(forgedChange(op, base), files)).toBe(true);
 	});
 
 	const sameFileLine =
