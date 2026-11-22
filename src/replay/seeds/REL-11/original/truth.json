@@ -1,0 +1,50 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/pricing/totals.ts",
+			"startLine": 42,
+			"endLine": 42,
+			"description": "The moved applyVolumeDiscount compares with > instead of >=, so a quantity exactly at a tier minimum no longer earns that tier discount."
+		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "src/pricing/totals.ts",
+					"side": "base",
+					"startLine": 15,
+					"endLine": 27
+				}
+			],
+			"to": [
+				{
+					"filename": "src/pricing/totals.ts",
+					"side": "head",
+					"startLine": 35,
+					"endLine": 47
+				}
+			],
+			"divergences": [
+				{
+					"kind": "changed",
+					"class": "code",
+					"base": {
+						"filename": "src/pricing/totals.ts",
+						"side": "base",
+						"startLine": 22,
+						"endLine": 22
+					},
+					"head": {
+						"filename": "src/pricing/totals.ts",
+						"side": "head",
+						"startLine": 42,
+						"endLine": 42
+					}
+				}
+			]
+		}
+	]
+}

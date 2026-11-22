@@ -1,9 +1,67 @@
 import { describe, expect, it } from "vitest";
 import {
+	collectRuns,
+	extractRuns,
 	findMovedBlocks,
 	normalizeCodeLine,
 	type PushFile,
+	selectMatches,
 } from "./moved-blocks.js";
+
+describe("selectMatches discovery charge", () => {
+	it("stops extending candidates once the charge refuses", () => {
+		const block = Array.from(
+			{ length: 6 },
+			(_, i) => `  const value${i} = compute(${i});`,
+		);
+		const hunk = (sign: string, at: number) =>
+			[
+				`@@ -${at},${sign === "-" ? 6 : 0} +${at},${sign === "+" ? 6 : 0} @@`,
+				...block.map((l) => `${sign}${l}`),
+			].join("\n");
+		const patch = [
+			...Array.from({ length: 30 }, (_, i) => hunk("-", i * 20 + 1)),
+			...Array.from({ length: 30 }, (_, i) => hunk("+", 1000 + i * 20)),
+		].join("\n");
+		const file: PushFile = {
+			filename: "a.ts",
+			status: "modified",
+			patch,
+			additions: 0,
+			deletions: 0,
+		};
+		const { deleted, added } = collectRuns([file]);
+		let calls = 0;
+		selectMatches(deleted, added, 5, undefined, {
+			allowSameFile: true,
+			charge: () => ++calls <= 10,
+		});
+		expect(calls).toBe(11);
+		calls = 0;
+		selectMatches(deleted, added, 5, undefined, { allowSameFile: true });
+		expect(calls).toBe(0);
+	});
+});
+
+describe("normalizeCodeLine on long lines", () => {
+	it("normalizes a 200KB line of spaced tokens in linear time", () => {
+		const line = "1 ".repeat(100_000);
+		const started = performance.now();
+		expect(normalizeCodeLine(line)).toBe(line.trim());
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+});
+
+describe("extractRuns after lines", () => {
+	it("gives a run closed by a later deletion the line that follows", () => {
+		const { deleted, added } = extractRuns(
+			"a.ts",
+			["@@ -1,5 +1,3 @@", "-a", "+b", "-c", " ctx"].join("\n"),
+		);
+		expect(deleted.map((r) => r.after)).toEqual(["c", "ctx"]);
+		expect(added.map((r) => r.after)).toEqual(["ctx"]);
+	});
+});
 
 describe("normalizeCodeLine with strip", () => {
 	const strip = (s: string) => normalizeCodeLine(s, { strip: true });
@@ -325,5 +383,58 @@ describe("findMovedBlocks at scale", () => {
 		const elapsed = performance.now() - start;
 		expect(out.filter((b) => b.lineCount === 5)).toHaveLength(100);
 		expect(elapsed).toBeLessThan(1000);
+	});
+});
+
+describe("same-file pairing across change regions", () => {
+	const SPLIT = [
+		"@@ -1,20 +1,20 @@",
+		...LINES.map((l) => `-${l}`),
+		" context one",
+		" context two",
+		" context three",
+		...LINES.map((l) => `+${l}`),
+	].join("\n");
+	const SAME_REGION = [
+		"@@ -1,20 +1,20 @@",
+		...LINES.map((l) => `-${l}`),
+		...LINES.map((l) => `+${l}`),
+	].join("\n");
+
+	function pair(patch: string, allowSameFile: boolean) {
+		const { deleted, added } = collectRuns([file("a.ts", [], [], patch)]);
+		return selectMatches(deleted, added, 5, undefined, { allowSameFile });
+	}
+
+	it("pairs a deleted and an added block in different regions of one file when allowSameFile is set", () => {
+		const matches = pair(SPLIT, true);
+		expect(matches).toHaveLength(1);
+		expect(matches[0]?.counted).toBe(6);
+		expect(pair(SPLIT, false)).toEqual([]);
+	});
+
+	it("does not pair runs of one change region", () => {
+		expect(pair(SAME_REGION, true)).toEqual([]);
+	});
+
+	it("keeps findMovedBlocks cross-file only", () => {
+		expect(findMovedBlocks([file("a.ts", [], [], SPLIT)])).toEqual([]);
+	});
+});
+
+describe("hunk header as a region boundary", () => {
+	it("separates a deleted run from an added run when a second hunk header has no context line before it", () => {
+		const patch = [
+			"@@ -1,5 +1,0 @@",
+			...LINES.map((l) => `-${l}`),
+			"@@ -40,0 +30,5 @@",
+			...LINES.map((l) => `+${l}`),
+		].join("\n");
+		const { deleted, added } = collectRuns([file("a.ts", [], [], patch)]);
+		const matches = selectMatches(deleted, added, 5, undefined, {
+			allowSameFile: true,
+		});
+		expect(matches).toHaveLength(1);
+		expect(deleted[0]?.region).not.toBe(added[0]?.region);
 	});
 });

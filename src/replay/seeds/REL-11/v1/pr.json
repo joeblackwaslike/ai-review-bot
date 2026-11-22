@@ -1,0 +1,4 @@
+{
+	"title": "Move the purge permission check next to the return in purgeExpired",
+	"body": "Moves the canPurge check below the deletion loop so the cutoff computation reads first. There is no functional change."
+}

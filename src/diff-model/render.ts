@@ -112,16 +112,33 @@ function hasCodeDivergence(op: Operation): boolean {
 	return op.divergences.some((d) => d.class === "code");
 }
 
-function rank(op: Operation): number {
-	if (op.type === "relocation") return hasCodeDivergence(op) ? 0 : 1;
-	return op.type === "rename" ? 2 : 3;
+const TYPE_RANK: Record<Operation["type"], number> = {
+	relocation: 0,
+	rename: 1,
+	mechanical: 2,
+};
+
+function linesCovered(op: Operation): number {
+	return op.to.reduce((sum, s) => sum + s.endLine - s.startLine + 1, 0);
 }
 
 function rankOperations(operations: Operation[]): Operation[] {
 	return operations
 		.map((op, index) => ({ op, index }))
-		.sort((a, b) => rank(a.op) - rank(b.op) || a.index - b.index)
+		.sort(
+			(a, b) =>
+				TYPE_RANK[a.op.type] - TYPE_RANK[b.op.type] ||
+				Number(hasCodeDivergence(b.op)) - Number(hasCodeDivergence(a.op)) ||
+				linesCovered(b.op) - linesCovered(a.op) ||
+				a.index - b.index,
+		)
 		.map(({ op }) => op);
+}
+
+function movedWithin(op: Operation): string | null {
+	const files = new Set([...op.from, ...op.to].map((s) => s.filename));
+	const [only] = files;
+	return files.size === 1 && only !== undefined ? only : null;
 }
 
 function plural(n: number, word: string): string {
@@ -135,6 +152,11 @@ function headline(op: Operation): string {
 			n > 0
 				? `Relocation with ${plural(n, "difference")} from the original`
 				: "Relocation";
+		const within = movedWithin(op);
+		if (within !== null) {
+			const part = (s: Span) => `${spanRange(s)} (${shownWording(s)})`;
+			return `${lead}: moved within ${untrusted(within)}, ${op.from.map(part).join(", ")} match ${op.to.map(part).join(", ")}.`;
+		}
 		return `${lead}: ${spansText(op.from)} match ${spansText(op.to)}.`;
 	}
 	if (op.type === "rename") {

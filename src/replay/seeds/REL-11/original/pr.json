@@ -1,0 +1,4 @@
+{
+	"title": "Group the formatting helpers above the discount logic in totals.ts",
+	"body": "Reorders totals.ts so applyVolumeDiscount sits at the bottom of the file. There is no functional change."
+}

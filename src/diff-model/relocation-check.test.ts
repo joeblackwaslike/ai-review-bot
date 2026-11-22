@@ -1,11 +1,37 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { partialStatements } from "./partial-statements.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation } from "./types.js";
 
 function pushFile(filename: string, patch: string): PushFile {
 	return { filename, status: "modified", patch, additions: 0, deletions: 0 };
+}
+
+function lineClaim(
+	baseFile: string,
+	baseStart: number,
+	baseEnd: number,
+	headFile: string,
+	headStart: number,
+	headEnd: number,
+): Operation {
+	const span = (
+		filename: string,
+		side: "base" | "head",
+		startLine: number,
+		endLine: number,
+	) => ({ filename, side, startLine, endLine, shown: "full" as const });
+	return {
+		id: "relocation-1",
+		type: "relocation",
+		from: [span(baseFile, "base", baseStart, baseEnd)],
+		to: [span(headFile, "head", headStart, headEnd)],
+		exact: true,
+		divergences: [],
+		reviewWeight: 0,
+	};
 }
 
 function moveFiles(
@@ -761,5 +787,489 @@ describe("verifyRelocation whole-line // allowlist", () => {
 		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
 		const forged = { ...reclassed(op, "comment-only"), reviewWeight: 0 };
 		expect(verifyRelocation(forged, files)).toBe(false);
+	});
+
+	it("verifies a same-file relocation", () => {
+		const block = fn(body(20));
+		const files = [
+			pushFile(
+				"src/a.ts",
+				[
+					`@@ -10,${block.length} +9,0 @@`,
+					...block.map((line) => `-${line}`),
+					`@@ -60,0 +50,${block.length} @@`,
+					...block.map((line) => `+${line}`),
+				].join("\n"),
+			),
+		];
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.from[0]?.filename).toBe(ops[0]?.to[0]?.filename);
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
+	});
+
+	it("drops a one-line claim whose text occurs twice on the base side", () => {
+		const line = "  const registeredHandlerCount = loadHandlers(config);";
+		const claim = () => lineClaim("src/a.ts", 10, 10, "src/b.ts", 3, 3);
+		const added = pushFile(
+			"src/b.ts",
+			["@@ -0,0 +3,1 @@", `+${line}`].join("\n"),
+		);
+		const once = pushFile(
+			"src/a.ts",
+			["@@ -10,1 +9,0 @@", `-${line}`].join("\n"),
+		);
+		const twice = pushFile(
+			"src/a.ts",
+			["@@ -10,1 +9,0 @@", `-${line}`, "@@ -40,1 +38,0 @@", `-${line}`].join(
+				"\n",
+			),
+		);
+		expect(verifyRelocation(claim(), [once, added])).toBe(true);
+		expect(verifyRelocation(claim(), [twice, added])).toBe(false);
+	});
+
+	it("drops a one-line claim whose text occurs twice on the head side", () => {
+		const line = "  const registeredHandlerCount = loadHandlers(config);";
+		const op = lineClaim("src/a.ts", 10, 10, "src/b.ts", 3, 3);
+		const removed = pushFile(
+			"src/a.ts",
+			["@@ -10,1 +9,0 @@", `-${line}`].join("\n"),
+		);
+		const twice = pushFile(
+			"src/b.ts",
+			["@@ -0,0 +3,1 @@", `+${line}`, "@@ -30,0 +33,1 @@", `+${line}`].join(
+				"\n",
+			),
+		);
+		expect(verifyRelocation(op, [removed, twice])).toBe(false);
+	});
+
+	it("drops a short claim that carries too little information", () => {
+		const line = "  return value;";
+		const op = lineClaim("src/a.ts", 10, 10, "src/b.ts", 3, 3);
+		const files = [
+			pushFile("src/a.ts", ["@@ -10,1 +9,0 @@", `-${line}`].join("\n")),
+			pushFile("src/b.ts", ["@@ -0,0 +3,1 @@", `+${line}`].join("\n")),
+		];
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	function oneLine(
+		baseFile: string,
+		headFile: string,
+		base: string,
+		head: string = base,
+	) {
+		const op = lineClaim(baseFile, 10, 10, headFile, 40, 40);
+		const files =
+			baseFile === headFile
+				? [
+						pushFile(
+							baseFile,
+							[
+								"@@ -10,1 +9,0 @@",
+								`-${base}`,
+								"@@ -39,0 +40,1 @@",
+								`+${head}`,
+							].join("\n"),
+						),
+					]
+				: [
+						pushFile(baseFile, ["@@ -10,1 +9,0 @@", `-${base}`].join("\n")),
+						pushFile(headFile, ["@@ -39,0 +40,1 @@", `+${head}`].join("\n")),
+					];
+		return { op, files };
+	}
+
+	it("requires 50 characters of information for a short same-file claim", () => {
+		const short = oneLine(
+			"src/a.ts",
+			"src/a.ts",
+			"  return { ready: missing.length === 0, missing };",
+		);
+		const long = oneLine(
+			"src/a.ts",
+			"src/a.ts",
+			"  const subtotal = computeSubtotal(items, taxRate, shippingZone);",
+		);
+		expect(verifyRelocation(short.op, short.files)).toBe(false);
+		expect(verifyRelocation(long.op, long.files)).toBe(true);
+	});
+
+	it("accepts the same 41-character line when it crosses files", () => {
+		const { op, files } = oneLine(
+			"src/a.ts",
+			"src/b.ts",
+			"  return { ready: missing.length === 0, missing };",
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it.each([
+		"  .map((item) => item.registeredHandlerCount)",
+		"  ?.registeredHandlerCount.toString()",
+		"  ?? loadRegisteredHandlerCount(config)",
+		"  ? registeredHandlerCount : fallbackHandlerCount",
+		"  => registeredHandlerCount(config, options)",
+		"  + computeRegisteredOffset(config, options)",
+		"  , registeredHandlerCount(config, options)",
+		"  && registeredHandlerCount(config, options)",
+		"  || registeredHandlerCount(config, options)",
+	])("drops a short claim that continues an expression: %s", (line) => {
+		const { op, files } = oneLine("src/a.ts", "src/b.ts", line);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("accepts a short whole-definition claim", () => {
+		const base = [
+			"def is_retryable(status):",
+			"    return status >= 500 and status != 501",
+		];
+		const op = lineClaim("a.py", 10, 11, "b.py", 4, 5);
+		const files = [
+			pushFile(
+				"a.py",
+				["@@ -10,2 +9,0 @@", ...base.map((l) => `-${l}`)].join("\n"),
+			),
+			pushFile(
+				"b.py",
+				["@@ -3,0 +4,2 @@", ...base.map((l) => `+${l}`)].join("\n"),
+			),
+		];
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts an unindented one-line declaration under 30 characters", () => {
+		const { op, files } = oneLine(
+			"src/a.ts",
+			"src/b.ts",
+			"export const MAX = 3;",
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("accepts an indented SCREAMING_CASE declaration", () => {
+		const { op, files } = oneLine(
+			"src/a.ts",
+			"src/b.ts",
+			"  const MAX_RETRIES = 3;",
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("drops an indented lower-case declaration under 30 characters", () => {
+		const { op, files } = oneLine("src/a.ts", "src/b.ts", "  const max = 3;");
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+});
+
+describe("verifyRelocation independent small-claim rules", () => {
+	const span = (
+		filename: string,
+		side: "base" | "head",
+		startLine: number,
+		endLine = startLine,
+	) => ({ filename, side, startLine, endLine, shown: "full" as const });
+
+	function exactClaim(from: Operation["from"], to: Operation["to"]): Operation {
+		return {
+			id: "relocation-1",
+			type: "relocation",
+			from,
+			to,
+			exact: true,
+			divergences: [],
+			reviewWeight: 0,
+		};
+	}
+
+	function crossFile(
+		baseRows: string[],
+		headRows: string[],
+		names: [string, string] = ["src/a.ts", "src/b.ts"],
+		claimed = 1,
+	) {
+		const files = [
+			pushFile(names[0], ["@@ -10,4 +10,1 @@", ...baseRows].join("\n")),
+			pushFile(names[1], ["@@ -3,1 +3,4 @@", ...headRows].join("\n")),
+		];
+		const op = exactClaim(
+			[span(names[0], "base", 10, 9 + claimed)],
+			[span(names[1], "head", 3, 2 + claimed)],
+		);
+		return { files, op };
+	}
+
+	function forgedChange(op: Operation, original: string): Operation {
+		return {
+			...op,
+			exact: false,
+			reviewWeight: 1,
+			divergences: [
+				{
+					kind: "changed",
+					class: "code",
+					base: op.from[0],
+					head: op.to[0],
+					original,
+				},
+			],
+		};
+	}
+
+	const unclosed =
+		"const resultOfTheLookup = compute(firstArgument, secondArgument,";
+
+	it.each([
+		[
+			"a base line followed by a continuation context line",
+			["-const total = compute(a, b)", " .map(wrap);"],
+			["+const total = compute(a, b)"],
+		],
+		[
+			"a line without a terminator followed by another line",
+			["-const approvedUserList = loadUsers(config).length", " other();"],
+			["+const approvedUserList = loadUsers(config).length", " other();"],
+		],
+		[
+			"a line that ends in an operator",
+			["-const approvedUserList = loadUsers(config) &&"],
+			["+const approvedUserList = loadUsers(config) &&"],
+		],
+		[
+			"a line that ends in a backslash",
+			["-total_amount_for_user = compute_amount(account) + \\"],
+			["+total_amount_for_user = compute_amount(account) + \\"],
+		],
+		[
+			"a line that starts with a closer",
+			["-} else if (user.isAdmin && flags.betaAccess) {"],
+			["+} else if (user.isAdmin && flags.betaAccess) {"],
+		],
+		[
+			"a single line with unclosed brackets",
+			[`-${unclosed}`],
+			[`+${unclosed}`],
+		],
+		["a one-letter declaration", ["-const i = 0;"], ["+const i = 0;"]],
+		["a comparison read as a declaration", ["-FOO == bar"], ["+FOO == bar"]],
+	])("drops an exact short claim over %s", (_, baseRows, headRows) => {
+		const { files, op } = crossFile(baseRows, headRows);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a claim that is one Python line ending in a colon", () => {
+		const line = "def compute_total_with_tax(price, quantity, rate):";
+		const { files, op } = crossFile(
+			[`-${line}`],
+			[`+${line}`],
+			["a.py", "b.py"],
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it.each(
+		partialStatements,
+	)("drops an exact claim over %s", (_, baseRows, headRows, claimed, ext) => {
+		const { files, op } = crossFile(
+			baseRows,
+			headRows,
+			[`src/a.${ext}`, `src/b.${ext}`],
+			claimed,
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("accepts a moved signature ending in an opening brace", () => {
+		const signature = [
+			"export function reasoningProviderOptions(",
+			"  selection: ModelSelection,",
+			"): Record<string, Record<string, string>> | undefined {",
+		];
+		const { files, op } = crossFile(
+			signature.map((l) => `-${l}`),
+			signature.map((l) => `+${l}`),
+			["src/a.ts", "src/b.ts"],
+			3,
+		);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("treats text whose first line has over 50 sites as not unique", () => {
+		const claimOver = (sites: number) => {
+			const block = (i: number) => [
+				"shared first line of every block",
+				`  const unique${i}Value = compute(${i}, config);`,
+			];
+			const deleted = Array.from({ length: sites }, (_, i) => [
+				`@@ -${i * 10 + 1},2 +${i * 10 + 1},0 @@`,
+				...block(i).map((l) => `-${l}`),
+			]).flat();
+			const patch = [
+				...deleted,
+				"@@ -9000,0 +9000,2 @@",
+				...block(0).map((l) => `+${l}`),
+			].join("\n");
+			const op = exactClaim(
+				[span("src/a.ts", "base", 1, 2)],
+				[span("src/a.ts", "head", 9000, 9001)],
+			);
+			return verifyRelocation(op, [pushFile("src/a.ts", patch)]);
+		};
+		expect(claimOver(10)).toBe(true);
+		expect(claimOver(60)).toBe(false);
+	});
+
+	it.each([
+		[
+			"a forged declaration claim with an unrelated head line",
+			"-const MAX = 5;",
+			"+foo(bar, baz);",
+			["src/a.ts", "src/b.ts"],
+		],
+		[
+			"a forged claim between differently named constants",
+			"-const ALPHA = 5;",
+			"+const BETA = 5;",
+			["src/a.ts", "src/b.ts"],
+		],
+		[
+			"a declaration claim across extension families",
+			"-const TIMEOUT = 30;",
+			"+TIMEOUT = 30",
+			["src/config.ts", "src/config.py"],
+		],
+	] as const)("drops %s", (_, baseRow, headRow, names) => {
+		const { files, op } = crossFile([baseRow], [headRow], [...names]);
+		expect(verifyRelocation(forgedChange(op, baseRow.slice(1)), files)).toBe(
+			false,
+		);
+	});
+
+	it.each([
+		["a template literal", "const a = `start", "end`;", false],
+		["no literal opener", "const a = start;", "end;", true],
+	])("verifies a short claim in a file with %s", (_, open, close, holds) => {
+		const seed = '    const userDisplayNameForAccount = "first";';
+		const patch = (sign: string, line: string) =>
+			["@@ -1,3 +1,3 @@", ` ${open}`, `${sign}${line}`, ` ${close}`].join("\n");
+		const files = [
+			pushFile("src/a.ts", patch("-", seed)),
+			pushFile("src/b.ts", patch("+", seed.trimStart())),
+		];
+		const op = exactClaim(
+			[span("src/a.ts", "base", 2)],
+			[span("src/b.ts", "head", 2)],
+		);
+		expect(verifyRelocation(op, files)).toBe(holds);
+	});
+
+	it("drops a declaration claim when the name is also declared on a multi-line deleted line", () => {
+		const claim = (extra: string[]) => {
+			const files = [
+				pushFile(
+					"src/b.ts",
+					["@@ -10,1 +10,0 @@", "-const LIMIT = { n: 1 };"].join("\n"),
+				),
+				pushFile(
+					"src/c.ts",
+					["@@ -3,0 +3,1 @@", "+const LIMIT = { n: 2 };"].join("\n"),
+				),
+				pushFile(
+					"src/a.ts",
+					["@@ -1,3 +1,0 @@", ...extra.map((l) => `-${l}`)].join("\n"),
+				),
+			];
+			const op = exactClaim(
+				[span("src/b.ts", "base", 10)],
+				[span("src/c.ts", "head", 3)],
+			);
+			return verifyRelocation(
+				forgedChange(op, "const LIMIT = { n: 1 };"),
+				files,
+			);
+		};
+		expect(claim([])).toBe(true);
+		expect(claim(["const LIMIT = {", "  n: 1,", "};"])).toBe(false);
+	});
+
+	const sameFileLine =
+		"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
+
+	it("drops a same-file short claim whose lines share one hunk", () => {
+		const files = [
+			pushFile(
+				"src/a.ts",
+				[
+					"@@ -10,6 +10,6 @@",
+					`-${sameFileLine}`,
+					" context one",
+					" context two",
+					" context three",
+					`+${sameFileLine}`,
+				].join("\n"),
+			),
+		];
+		const op = exactClaim(
+			[span("src/a.ts", "base", 10)],
+			[span("src/a.ts", "head", 13)],
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops a same-file claim whose two sides sit in one change region", () => {
+		const block = body(6);
+		const files = [
+			pushFile(
+				"src/a.ts",
+				[
+					"@@ -1,8 +1,8 @@",
+					" context a",
+					...block.map((l) => `-${l}`),
+					...block.map((l) => `+    ${l}`),
+					" context b",
+				].join("\n"),
+			),
+		];
+		const op = exactClaim(
+			[span("src/a.ts", "base", 2, 7)],
+			[span("src/a.ts", "head", 2, 7)],
+		);
+		expect(verifyRelocation(op, files)).toBe(false);
+	});
+
+	it("drops swapped claims over a paragraph repeated in two regions", () => {
+		const paragraph = body(5);
+		const region = (name: string) => [
+			` context ${name}`,
+			...paragraph.map((l) => `-${l}`),
+			...paragraph.map((l) => `+    ${l}`),
+			" context end",
+		];
+		const files = [
+			pushFile(
+				"src/a.ts",
+				[
+					"@@ -1,7 +1,7 @@",
+					...region("a"),
+					"@@ -30,7 +30,7 @@",
+					...region("c"),
+				].join("\n"),
+			),
+		];
+		const swapped = exactClaim(
+			[span("src/a.ts", "base", 2, 6)],
+			[span("src/a.ts", "head", 31, 35)],
+		);
+		expect(verifyRelocation(swapped, files)).toBe(false);
+	});
+
+	it("verifies a claim over a 160KB line without scanning it", () => {
+		const line = `x = "${'\\"'.repeat(80_000)}`;
+		const { files, op } = crossFile([`-${line}`], [`+${line}`]);
+		const started = performance.now();
+		expect(verifyRelocation(op, files)).toBe(false);
+		expect(performance.now() - started).toBeLessThan(1000);
 	});
 });

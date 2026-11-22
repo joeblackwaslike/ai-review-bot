@@ -7,6 +7,8 @@ import { listSeeds, type Seed } from "./schema.js";
 
 const OPS = ["DEL-04", "MEC-01", "REL-01", "REL-03", "REL-10"];
 const VARIANTS = ["clean", "original", "v1", "v2", "v3"];
+const MATCHING_OPS = ["REL-11", "REL-12"];
+const MATCHING_VARIANTS = ["original", "v1"];
 const DEFECT_VARIANTS = ["original", "v1", "v2", "v3"];
 const HINT_WORDS = /\b(bug|seed|todo|fixme|stale)\b/i;
 const SLOW = 120_000;
@@ -33,9 +35,14 @@ beforeAll(async () => {
 });
 
 describe("shipped seeds", () => {
-	it("are 5 operations times 5 variants", () => {
+	it("are 5 operations times 5 variants plus the matching families", () => {
 		expect(seeds.map((s) => s.id).sort()).toEqual(
-			OPS.flatMap((op) => VARIANTS.map((v) => `${op}/${v}`)).sort(),
+			[
+				...OPS.flatMap((op) => VARIANTS.map((v) => `${op}/${v}`)),
+				...MATCHING_OPS.flatMap((op) =>
+					MATCHING_VARIANTS.map((v) => `${op}/${v}`),
+				),
+			].sort(),
 		);
 	});
 

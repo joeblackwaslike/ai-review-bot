@@ -1,0 +1,33 @@
+{
+	"clean": false,
+	"defects": [
+		{
+			"path": "src/inventory/purge.ts",
+			"startLine": 28,
+			"endLine": 28,
+			"description": "The canPurge check now runs after the deletion loop, so an unauthorized actor deletes the tenant items before the ForbiddenError is thrown."
+		}
+	],
+	"operations": [
+		{
+			"type": "relocation",
+			"from": [
+				{
+					"filename": "src/inventory/purge.ts",
+					"side": "base",
+					"startLine": 19,
+					"endLine": 19
+				}
+			],
+			"to": [
+				{
+					"filename": "src/inventory/purge.ts",
+					"side": "head",
+					"startLine": 28,
+					"endLine": 28
+				}
+			],
+			"divergences": []
+		}
+	]
+}

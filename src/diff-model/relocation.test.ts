@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
+import { partialStatements } from "./partial-statements.fixture.js";
 import { findRelocations } from "./relocation.js";
+import { verifyRelocation } from "./relocation-check.js";
+import type { Operation } from "./types.js";
 
 function pushFile(filename: string, patch: string): PushFile {
 	return { filename, status: "modified", patch, additions: 0, deletions: 0 };
@@ -243,9 +246,70 @@ describe("findRelocations", () => {
 		expect(ops[0]).toMatchObject({ exact: true, divergences: [] });
 	});
 
-	it("ignores runs under 5 meaningful lines", () => {
-		const block = fn(body(2));
+	it("ignores a run under 5 lines that carries too little information", () => {
+		const block = ["  a++;", "  b++;", "  c++;", "  d++;"];
 		expect(move(block, block)).toEqual([]);
+	});
+
+	it("accepts a run of 4 distinct lines that carries enough information", () => {
+		const block = body(4);
+		expect(move(block, block)).toHaveLength(1);
+	});
+
+	it("ignores 3 lines of import boilerplate and a short literal", () => {
+		const imports = [
+			'import { readFile } from "node:fs/promises";',
+			'import { join } from "node:path";',
+			'import { z } from "zod";',
+		];
+		const literal = ["const modes = [", '  "fast", "slow", "balanced",', "];"];
+		expect(move(imports, imports)).toEqual([]);
+		expect(move(literal, literal)).toEqual([]);
+	});
+
+	it("finds a 4-line function moved between files", () => {
+		const block = fn(body(2));
+		const ops = move(block, block);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({ exact: true, divergences: [] });
+	});
+
+	it("reports a distinctive function signature that moved without its body", () => {
+		const signature = [
+			"export function reasoningProviderOptions(",
+			"  selection: ModelSelection,",
+			"): Record<string, Record<string, string>> | undefined {",
+		];
+		expect(move(signature, signature)).toHaveLength(1);
+	});
+
+	it("ignores a 3-line function too short to be distinctive", () => {
+		const block = ["function id(x) {", "  return x;", "}"];
+		expect(move(block, block)).toEqual([]);
+	});
+
+	it("finds a short Python def and a Ruby method", () => {
+		const py = [
+			"def wait(attempt, base=0.25):",
+			"    delay = min(base * (2 ** attempt), MAX_DELAY)",
+			"    return delay",
+		];
+		const ops = findRelocations([
+			deletedFrom("a/util.py", 6, py),
+			addedTo("a/client.py", 10, py),
+		]);
+		expect(ops).toHaveLength(1);
+		const rb = [
+			"def self.money(cents)",
+			'  format("$%d.%02d", cents / 100, cents % 100)',
+			"end",
+		];
+		expect(
+			findRelocations([
+				deletedFrom("a/fmt.rb", 7, rb),
+				addedTo("a/cur.rb", 3, rb),
+			]),
+		).toHaveLength(1);
 	});
 
 	it("classes a consistent identifier substitution as a rename", () => {
@@ -609,5 +673,674 @@ describe("findRelocations block comment allowlist", () => {
 		const [base, head] = pair(["  /* old */"], ["  /* new */"], [15]);
 		const ops = moveNamed(base, head, "docs/a.md", "docs/b.md");
 		expect(ops[0]?.divergences.map((d) => d.class)).toEqual(["code"]);
+	});
+});
+
+describe("findRelocations one-line declarations", () => {
+	describe("one-line declarations", () => {
+		function moveDeclaration(base: string, head: string) {
+			const files = [
+				deletedFrom("src/config.ts", 4, [base]),
+				addedTo("src/limits.ts", 9, [head]),
+			];
+			return { ops: findRelocations(files), files };
+		}
+
+		it("finds a constant moved unchanged to another file", () => {
+			const { ops, files } = moveDeclaration(
+				"export const MAX_RETRIES = 3;",
+				"export const MAX_RETRIES = 3;",
+			);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]).toMatchObject({
+				type: "relocation",
+				exact: true,
+				divergences: [],
+				from: [{ filename: "src/config.ts", startLine: 4, endLine: 4 }],
+				to: [{ filename: "src/limits.ts", startLine: 9, endLine: 9 }],
+			});
+			expect(verifyRelocation(ops[0] as never, files)).toBe(true);
+		});
+
+		it("reports a moved constant whose value changed, with the original line", () => {
+			const { ops, files } = moveDeclaration(
+				"export const MAX_RETRIES = { count: 3, delay: 100 };",
+				"export const MAX_RETRIES = { count: 30, delay: 100 };",
+			);
+			expect(ops).toHaveLength(1);
+			expect(ops[0]?.exact).toBe(false);
+			expect(ops[0]?.divergences).toHaveLength(1);
+			expect(ops[0]?.divergences[0]).toMatchObject({
+				kind: "changed",
+				class: "code",
+				original: "export const MAX_RETRIES = { count: 3, delay: 100 };",
+			});
+			expect(verifyRelocation(ops[0] as never, files)).toBe(true);
+		});
+
+		it("finds a moved type alias and a Python constant", () => {
+			expect(
+				moveDeclaration(
+					"export type Cents = number;",
+					"export type Cents = number;",
+				).ops,
+			).toHaveLength(1);
+			const py = findRelocations([
+				deletedFrom("app/a.py", 2, ["MAX_DELAY = 30.0"]),
+				addedTo("app/b.py", 5, ["MAX_DELAY = 30.0"]),
+			]);
+			expect(py).toHaveLength(1);
+			expect(py[0]?.exact).toBe(true);
+		});
+
+		it("ignores indented locals and names declared more than once", () => {
+			expect(
+				moveDeclaration(
+					"  const result = compute();",
+					"  const result = compute();",
+				).ops,
+			).toEqual([]);
+			const twice = findRelocations([
+				deletedFrom("src/a.ts", 1, ["export const LIMIT = 1;"]),
+				deletedFrom("src/b.ts", 1, ["export const LIMIT = 2;"]),
+				addedTo("src/c.ts", 1, ["export const LIMIT = 1;"]),
+			]);
+			expect(twice).toEqual([]);
+		});
+
+		it("ignores a declaration inside a prose file and a line that continues", () => {
+			const doc = findRelocations([
+				deletedFrom("src/a.ts", 1, ["const MAP: Record<"]),
+				addedTo("docs/plan.md", 1, ["const MAP: Record<"]),
+				deletedFrom("src/b.ts", 1, ["export const NOTE = 1;"]),
+				addedTo("docs/plan.md", 5, ["export const NOTE = 1;"]),
+			]);
+			expect(doc).toEqual([]);
+		});
+
+		it("ignores a constant re-declared in the same file and a multi-line start", () => {
+			expect(
+				findRelocations([
+					pushFile(
+						"src/a.ts",
+						"@@ -1,1 +1,1 @@\n-export const LIMIT = 1;\n+export const LIMIT = 2;",
+					),
+				]),
+			).toEqual([]);
+			expect(
+				moveDeclaration("export const TABLE = {", "export const TABLE = {").ops,
+			).toEqual([]);
+		});
+	});
+});
+
+describe("distinctiveness acceptance and same-file moves", () => {
+	const statement =
+		"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
+
+	it("accepts a distinctive one-line statement moved between files", () => {
+		const ops = move([statement], [statement]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]).toMatchObject({ exact: true, divergences: [] });
+	});
+
+	it("rejects a repeated line", () => {
+		const files = [
+			deletedFrom("src/a.ts", 10, [statement]),
+			deletedFrom("src/c.ts", 10, [statement]),
+			addedTo("src/b.ts", 3, [statement]),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it("rejects two identical short definitions", () => {
+		const wide = [
+			"function formatCurrency(amount, currency) {",
+			"  return amount.toFixed(2) + currency;",
+			"}",
+		];
+		const files = [
+			deletedFrom("src/a.ts", 1, wide),
+			deletedFrom("src/c.ts", 1, wide),
+			addedTo("src/b.ts", 1, wide),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it("accepts a short unique definition of 30 to 39 characters", () => {
+		const def = ["function areaOf(a, b) {", "  return a * b;", "}"];
+		expect(move(def, def)).toHaveLength(1);
+	});
+
+	it("rejects a definition duplicated only on the added side", () => {
+		const def = [
+			"function formatCurrency(amount, currency) {",
+			"  return amount.toFixed(2) + currency;",
+			"}",
+		];
+		const files = [
+			deletedFrom("src/a.ts", 1, def),
+			addedTo("src/b.ts", 1, def),
+			addedTo("src/c.ts", 1, def),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it("rejects a lone signature line and a lone Python def line", () => {
+		const ts = ["export async function fetchEverythingFromTheServer("];
+		expect(move(ts, ts)).toEqual([]);
+		const py = ["def compute_the_total_with_offset(value, offset):"];
+		expect(
+			findRelocations([
+				deletedFrom("a/util.py", 1, py),
+				addedTo("a/client.py", 1, py),
+			]),
+		).toEqual([]);
+	});
+
+	it("accepts a one-line Python def with a body of at least 40 characters", () => {
+		const py = [
+			"def total_with_offset(value, offset): return value * 2 + offset + 1",
+		];
+		expect(
+			findRelocations([
+				deletedFrom("a/util.py", 1, py),
+				addedTo("a/client.py", 1, py),
+			]),
+		).toHaveLength(1);
+	});
+
+	it("rejects a line of only Python keywords", () => {
+		const lines = ["    return None", "    return None"];
+		const long = ["  return None"];
+		expect(move(long, long)).toEqual([]);
+		expect(move(lines, lines)).toEqual([]);
+	});
+
+	it("accepts four identical lines in one run as one block", () => {
+		const block = Array.from({ length: 4 }, () => `${statement}`);
+		expect(move(block, block)).toHaveLength(1);
+	});
+
+	it("keeps the relocations found before the budget ran out and repeats them exactly", () => {
+		const files = [1, 2, 3].flatMap((i) => {
+			const line = `  const result${i} = computeSomething${i}(first, second, third);`;
+			return [
+				deletedFrom(`src/a${i}.ts`, 1, [line]),
+				addedTo(`src/b${i}.ts`, 1, [line]),
+			];
+		});
+		const full = findRelocations(files);
+		expect(full).toHaveLength(3);
+		const limited = findRelocations(files, { candidates: 1 });
+		expect(limited).toHaveLength(1);
+		expect(
+			full.some(
+				(op) => JSON.stringify(op.from) === JSON.stringify(limited[0]?.from),
+			),
+		).toBe(true);
+		expect(findRelocations(files, { candidates: 1 })).toEqual(limited);
+		expect(findRelocations(files, { tokens: 0 })).toEqual([]);
+	});
+
+	it("keeps accepting large seeds once the token pool is empty", () => {
+		const block = body(8);
+		expect(
+			findRelocations(
+				[deletedFrom("src/a.ts", 1, block), addedTo("src/b.ts", 1, block)],
+				{ tokens: 0 },
+			),
+		).toHaveLength(1);
+	});
+
+	it("rejects an import line", () => {
+		const line =
+			'import { computeSubtotal, computeTax } from "./pricing/subtotal.js";';
+		expect(move([line], [line])).toEqual([]);
+	});
+
+	it("rejects a bare literal line", () => {
+		const line = '  "alpha-beta-gamma-delta-epsilon-zeta-eta-theta-iota",';
+		expect(move([line], [line])).toEqual([]);
+	});
+
+	it("accepts a two-line definition", () => {
+		const block = [
+			"export function applyDiscount(input, rate) {",
+			"  return input.price * rate; }",
+		];
+		const ops = move(block, block);
+		expect(ops).toHaveLength(1);
+	});
+
+	it("reports a block moved within one file", () => {
+		const block = body(2);
+		const patch = [
+			"@@ -1,4 +1,2 @@",
+			...block.map((l) => `-${l}`),
+			" context one",
+			" context two",
+			"@@ -40,3 +38,5 @@",
+			" context three",
+			...block.map((l) => `+${l}`),
+			" context four",
+			" context five",
+		].join("\n");
+		const files = [pushFile("src/a.ts", patch)];
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.from[0]?.filename).toBe("src/a.ts");
+		expect(ops[0]?.to[0]?.filename).toBe("src/a.ts");
+		expect(verifyRelocation(ops[0] as never, files)).toBe(true);
+	});
+
+	it("does not report an in-place edit as a same-file move", () => {
+		const block = body(2);
+		const patch = [
+			"@@ -1,2 +1,2 @@",
+			...block.map((l) => `-${l}`),
+			...block.map((l) => `+${l}`),
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("reports a one-line declaration moved within one file", () => {
+		const patch = [
+			"@@ -1,3 +1,2 @@",
+			"-export const MAX_RETRIES = 3;",
+			" context one",
+			" context two",
+			"@@ -40,2 +39,3 @@",
+			" context three",
+			"+export const MAX_RETRIES = 3;",
+			" context four",
+		].join("\n");
+		const ops = findRelocations([pushFile("src/a.ts", patch)]);
+		expect(ops).toHaveLength(1);
+	});
+
+	it("does not report a one-line declaration deleted and re-added within one hunk", () => {
+		const patch = [
+			"@@ -1,5 +1,5 @@",
+			"-export const MAX_RETRIES = 3;",
+			" context one",
+			" context two",
+			"+export const MAX_RETRIES = 3;",
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("does not pair a short same-file seed whose runs share one hunk", () => {
+		const line =
+			"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
+		const patch = [
+			"@@ -1,9 +1,9 @@",
+			` context zero`,
+			`-${line}`,
+			" context one",
+			" context two",
+			" context three",
+			`+${line}`,
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("pairs a short same-file seed across two hunks", () => {
+		const line =
+			"  const subtotal = computeSubtotal(items, taxRate, shippingZone);";
+		const patch = [
+			"@@ -10,4 +10,3 @@",
+			" context zero",
+			`-${line}`,
+			" context one",
+			" context two",
+			"@@ -40,3 +39,4 @@",
+			" context three",
+			`+${line}`,
+			" context four",
+			" context five",
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toHaveLength(1);
+	});
+
+	it("rejects a short same-file seed under 50 characters of information", () => {
+		const line = "  return { ready: missing.length === 0, missing };";
+		const patch = [
+			"@@ -10,4 +10,3 @@",
+			" context zero",
+			`-${line}`,
+			" context one",
+			" context two",
+			"@@ -40,3 +39,4 @@",
+			" context three",
+			`+${line}`,
+			" context four",
+			" context five",
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+
+	it("rejects a short seed that starts mid-expression", () => {
+		const lines = ['  .split("\\n")', "  .find((l) => l.trim())"];
+		expect(move(lines, lines)).toEqual([]);
+	});
+
+	it.each([
+		["  .map((item) => item.registeredHandlerCount)", "  .filter(Boolean)"],
+		["  ?.registeredHandlerCount.toString()", "  ?.trim()"],
+		["  ?? loadRegisteredHandlerCount(config)", "  ?? 0"],
+		["  ? registeredHandlerCount : fallbackHandlerCount", "  : 0"],
+		["  => registeredHandlerCount(config, options)", "  => 1"],
+		["  + computeRegisteredOffset(config, options)", "  + 1"],
+		["  , registeredHandlerCount(config, options)", "  , 1"],
+		["  && registeredHandlerCount(config, options)", "  && 1"],
+		["  || registeredHandlerCount(config, options)", "  || 1"],
+	])("rejects a short seed that continues an expression: %s", (first, second) => {
+		const lines = [first, second];
+		expect(move(lines, lines)).toEqual([]);
+	});
+
+	it("rejects two identical short Python definitions on the deleted side", () => {
+		const def = [
+			"def is_retryable_status(status):",
+			"    return status >= 500 and status != 501",
+		];
+		const files = [
+			deletedFrom("a.py", 1, def),
+			deletedFrom("c.py", 1, def),
+			addedTo("b.py", 1, def),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it.each([
+		"package-lock.json",
+		"pnpm-lock.yaml",
+		"yarn.lock",
+		"bun.lock",
+		"Cargo.lock",
+		"poetry.lock",
+		"Gemfile.lock",
+		"dist/app.min.js",
+		"dist/app.min.css",
+		"src/__snapshots__/a.test.ts.snap",
+	])("ignores %s in relocation matching", (name) => {
+		const lines = body(12);
+		const patch = [
+			"@@ -1,13 +1,1 @@",
+			...lines.map((l) => `-${l}`),
+			" context one",
+			" context two",
+			" context three",
+			" context four",
+			" context five",
+			" context six",
+			" context seven",
+			" context eight",
+			"@@ -60,3 +50,15 @@",
+			" context nine",
+			...lines.map((l) => `+${l}`),
+		].join("\n");
+		expect(findRelocations([pushFile(name, patch)])).toEqual([]);
+		expect(
+			findRelocations([
+				deletedFrom(name, 1, lines),
+				addedTo("src/b.ts", 1, lines),
+			]),
+		).toEqual([]);
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toHaveLength(1);
+	});
+});
+
+describe("findRelocations statement continuation", () => {
+	const hunk = (filename: string, rows: string[]) =>
+		pushFile(filename, ["@@ -10,9 +10,9 @@", ...rows].join("\n"));
+	const pairOf = (baseRows: string[], headRows: string[]) => [
+		hunk("src/a.ts", baseRows),
+		hunk("src/b.ts", headRows),
+	];
+	const loaded = "const approvedUserList = loadUsers(config)";
+
+	it.each([
+		[
+			"a declaration followed by a continuation line in the context",
+			["-const total = compute(a, b)", "   .map(wrap);"],
+			["+const total = compute(a, b);", " context"],
+		],
+		[
+			"a short block that lacks a terminator when a line follows",
+			[`-${loaded}.length`, " other();"],
+			[`+${loaded}.length`, " other();"],
+		],
+		[
+			"a short block that ends in an operator",
+			["-const approvedUserList = loadUsers(config) &&"],
+			["+const approvedUserList = loadUsers(config) &&"],
+		],
+		[
+			"a short block that ends in a backslash",
+			["-total_amount_for_user = compute_amount(account) + \\"],
+			["+total_amount_for_user = compute_amount(account) + \\"],
+		],
+	])("does not claim %s", (_, baseRows, headRows) => {
+		expect(findRelocations(pairOf(baseRows, headRows))).toEqual([]);
+	});
+
+	it.each(partialStatements)("does not claim %s", (_, base, head, __, ext) => {
+		const files = [hunk(`src/a.${ext}`, base), hunk(`src/b.${ext}`, head)];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it("does not seed an else-if line that opens with a closer", () => {
+		const closer = "} else if (user.isAdmin && flags.betaAccess) {";
+		expect(move([closer], [closer])).toEqual([]);
+	});
+});
+
+describe("findRelocations same-file uniqueness", () => {
+	it("does not pair a repeated paragraph re-indented in two regions of one file", () => {
+		const paragraph = body(5);
+		const region = (name: string) => [
+			` context ${name}`,
+			...paragraph.map((l) => `-${l}`),
+			...paragraph.map((l) => `+    ${l}`),
+			" context end",
+		];
+		const patch = [
+			"@@ -1,7 +1,7 @@",
+			...region("a"),
+			"@@ -30,7 +30,7 @@",
+			...region("c"),
+		].join("\n");
+		expect(findRelocations([pushFile("src/a.ts", patch)])).toEqual([]);
+	});
+});
+
+describe("findRelocations declaration pairing", () => {
+	const one = (filename: string, sign: "-" | "+", text: string) =>
+		pushFile(filename, ["@@ -5,1 +5,1 @@", `${sign}${text}`].join("\n"));
+
+	it.each([
+		[
+			"same-named type aliases with unrelated bodies",
+			"src/Button.tsx|type Props = { label: string };",
+			"src/Card.tsx|type Props = { children: ReactNode; elevated: boolean };",
+		],
+		[
+			"declarations across extension families",
+			"src/limits.ts|export const MAX_ITEMS = 5;",
+			"src/limits.go|const MAX_ITEMS = 5",
+		],
+		["a one-letter name", "src/a.ts|const i = 0;", "src/b.ts|const i = 0;"],
+		[
+			"a changed value sharing too little",
+			"src/a.ts|const MAX = 5;",
+			"src/b.ts|const MAX = buildLimit(config, defaults);",
+		],
+	])("does not pair %s", (_, base, head) => {
+		const [baseName, baseText] = base.split("|") as [string, string];
+		const [headName, headText] = head.split("|") as [string, string];
+		const files = [one(baseName, "-", baseText), one(headName, "+", headText)];
+		expect(findRelocations(files)).toEqual([]);
+	});
+
+	it("still claims a related declaration with a small change", () => {
+		const base = "export const DEFAULTS = { retries: 3, timeout: 1000 };";
+		const ops = findRelocations([
+			one("src/a.ts", "-", base),
+			one("src/b.ts", "+", base.replace("3", "5")),
+		]);
+		expect(ops).toHaveLength(1);
+		expect(ops[0]?.exact).toBe(false);
+	});
+});
+
+describe("findRelocations literal-risk files and declaration names", () => {
+	const inTemplate = (
+		open: string,
+		sign: string,
+		line: string,
+		close: string,
+	) =>
+		["@@ -1,3 +1,3 @@", ` ${open}`, `${sign}${line}`, ` ${close}`].join("\n");
+	const seed = '    const userDisplayNameForAccount = "first";';
+
+	it.each([
+		["a template literal", "const a = `start", "end`;", true],
+		["no literal opener", "const a = start;", "end;", false],
+	])("handles a short seed in a file with %s", (_, open, close, risky) => {
+		const files = [
+			pushFile("src/a.ts", inTemplate(open, "-", seed, close)),
+			pushFile("src/b.ts", inTemplate(open, "+", seed.trimStart(), close)),
+		];
+		expect(findRelocations(files)).toHaveLength(risky ? 0 : 1);
+	});
+
+	it("stops discovery when the extension pool is empty", () => {
+		const block = body(8);
+		const files = [
+			deletedFrom("src/a.ts", 1, block),
+			addedTo("src/b.ts", 1, block),
+		];
+		expect(findRelocations(files)).toHaveLength(1);
+		expect(findRelocations(files, { extensions: 0 })).toEqual([]);
+	});
+
+	it("counts a multi-line declaration against a one-line declaration of the same name", () => {
+		const files = [
+			deletedFrom("src/a.ts", 1, ["const LIMIT = {", "  n: 1,", "};"]),
+			deletedFrom("src/b.ts", 1, ["const LIMIT = { n: 1 };"]),
+			addedTo("src/c.ts", 1, ["const LIMIT = { n: 2 };"]),
+		];
+		expect(findRelocations(files)).toEqual([]);
+	});
+});
+
+describe("findRelocations budget order", () => {
+	it("caps operations by drawing one candidate per large seed", () => {
+		const files = Array.from({ length: 10 }, (_, i) => {
+			const block = body(5).map((l) => l.replace("v", `blk${i}v`));
+			return [
+				deletedFrom(`src/a${i}.ts`, 1, block),
+				addedTo(`src/b${i}.ts`, 1, block),
+			];
+		}).flat();
+		expect(findRelocations(files)).toHaveLength(10);
+		expect(findRelocations(files, { candidates: 3 })).toHaveLength(3);
+	});
+
+	it("lets a later block through after earlier junk", () => {
+		const junk = Array.from(
+			{ length: 5 },
+			(_, i) => `  const padding${i} = "${"x".repeat(39_950)}";`,
+		);
+		const real = body(7);
+		const ops = findRelocations([
+			deletedFrom("src/a.ts", 1, junk),
+			addedTo("src/b.ts", 1, junk),
+			deletedFrom("src/c.ts", 1, real),
+			addedTo("src/d.ts", 1, real),
+		]);
+		expect(ops.some((op) => op.from[0]?.filename === "src/c.ts")).toBe(true);
+	});
+});
+
+describe("findRelocations oversized lines", () => {
+	it("skips a 160KB quote-and-backslash line quickly", () => {
+		const text = `x = "${'\\"'.repeat(80_000)}`;
+		const started = performance.now();
+		const ops = move([text], [text]);
+		expect(performance.now() - started).toBeLessThan(1000);
+		expect(ops).toEqual([]);
+	});
+});
+
+describe("findRelocations budget exhaustion paths", () => {
+	const short = "  const result1 = computeSomething1(first, second, third);";
+	const reached = (ops: Operation[]) =>
+		new Set(ops.map((op) => op.from[0]?.filename));
+
+	function blocks(count: number): PushFile[] {
+		return Array.from({ length: count }, (_, n) => {
+			const base = body(14).map((l) => l.replace("v", `blk${n}v`));
+			const head = base.map((l, i) =>
+				i === 6
+					? (base[7] as string)
+					: i === 7
+						? (base[8] as string)
+						: i === 8
+							? `  const added${n} = other(${n});`
+							: l,
+			);
+			return [
+				deletedFrom(`src/a${n}.ts`, 1, base),
+				addedTo(`src/b${n}.ts`, 1, head),
+			];
+		}).flat();
+	}
+
+	it("stops resolving chains once the cells pool runs dry after the seeds", () => {
+		const files = blocks(3);
+		const limited = findRelocations(files, { cells: 16 });
+		expect(reached(findRelocations(files)).has("src/a2.ts")).toBe(true);
+		expect(reached(limited).has("src/a0.ts")).toBe(true);
+		expect(reached(limited).has("src/a2.ts")).toBe(false);
+	});
+
+	it("keeps resolving chains when the seeds themselves ran dry", () => {
+		const files = [
+			deletedFrom("src/s1.ts", 1, [short]),
+			addedTo("src/s2.ts", 1, [short]),
+			...blocks(3),
+		];
+		const limited = findRelocations(files, { tokens: 0, cells: 16 });
+		expect(reached(limited).has("src/a2.ts")).toBe(true);
+	});
+
+	it("skips the declaration pass once a short seed has exhausted the budget", () => {
+		const declaration = ["export const LIMIT_KEY = { id: 1 };"];
+		const files = [
+			deletedFrom("src/s1.ts", 1, [short]),
+			addedTo("src/s2.ts", 1, [short]),
+			deletedFrom("src/c1.ts", 1, declaration),
+			addedTo("src/c2.ts", 1, declaration),
+		];
+		expect(findRelocations(files)).toHaveLength(2);
+		expect(findRelocations(files, { tokens: 0 })).toEqual([]);
+	});
+
+	it("claims a whole definition with no per-line information", () => {
+		const definition = [
+			"export default async function () {",
+			'  return await import("./heavy/module/path.js");',
+			"}",
+		];
+		const ops = move(definition, definition);
+		expect(ops).toHaveLength(1);
+		const files = [
+			deletedFrom("src/a.ts", 10, definition),
+			addedTo("src/b.ts", 3, definition),
+		];
+		expect(verifyRelocation(ops[0] as Operation, files)).toBe(true);
 	});
 });

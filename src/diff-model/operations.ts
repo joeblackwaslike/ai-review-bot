@@ -1,4 +1,4 @@
-import type { PushFile } from "../moved-blocks.js";
+import { type PushFile, UNSAFE_FILE_TEXT } from "../moved-blocks.js";
 import { lexicallySafe, normalizeSafe } from "./lexical.js";
 import type { Operation, Span } from "./types.js";
 
@@ -11,7 +11,6 @@ const MIN_RENAME_LINES = 3;
 const MIN_LINE_LENGTH = 3;
 const MAX_RENAME_FILES = 200;
 const MAX_COUNT_SKEW = 0.4;
-const UNSAFE_FILE_TEXT = /`|"{3}|'{3}|<<[-~]?\s*["']?\w/;
 const NAMED_CLAUSE = String.raw`\{[^{}=()/]*\}`;
 const NAMESPACE_CLAUSE = String.raw`\*(?:\s+as\s+[\w$]+)?`;
 const TS_FROM = new RegExp(

@@ -21,7 +21,12 @@ export interface MovedBlock {
 	spanLines: number;
 }
 
-/** A maximal run of consecutive deleted or added lines, with the line number of its first line. */
+/**
+ * A maximal run of consecutive deleted or added lines, with the line number of its first line.
+ * `region` numbers the stretches between context lines or hunk headers, so a deleted run and
+ * its replacement share one region. `hunk` numbers the `@@` hunks. `after` is the context
+ * line after the run's change group, or undefined at a hunk header or the end of the patch.
+ */
 export interface Run {
 	index: number;
 	filename: string;
@@ -29,9 +34,15 @@ export interface Run {
 	lines: string[];
 	raw: string[];
 	startLine: number;
+	region: number;
+	hunk: number;
+	after: string | undefined;
+	literalRisk: boolean;
 	used: boolean[];
 }
 
+/** Matches a file patch that mentions a backtick, a triple quote or a heredoc opener. */
+export const UNSAFE_FILE_TEXT = /`|"{3}|'{3}|<<[-~]?\s*["']?\w/;
 const MIN_COUNTED_LENGTH = 3;
 const MAX_KEY_OCCURRENCES = 50;
 
@@ -96,6 +107,7 @@ export function normalizeCodeLine(
 		out = line.slice(0, i);
 	}
 	let pendingSpace = false;
+	let hasContent = false;
 	while (i < line.length) {
 		const ch = line[i] as string;
 		if (/\s/.test(ch)) {
@@ -103,13 +115,10 @@ export function normalizeCodeLine(
 			i++;
 			continue;
 		}
-		if (
-			pendingSpace &&
-			out.trim() !== "" &&
-			(!opts.strip || needsSeparator(out, ch))
-		)
+		if (pendingSpace && hasContent && (!opts.strip || needsSeparator(out, ch)))
 			out += " ";
 		pendingSpace = false;
+		hasContent = true;
 		if (!QUOTES.has(ch)) {
 			out += ch;
 			i++;
@@ -144,6 +153,7 @@ export function extractRuns(
 	const deleted: Run[] = [];
 	const added: Run[] = [];
 	if (!patch) return { deleted, added };
+	const literalRisk = UNSAFE_FILE_TEXT.test(patch);
 	const indentSensitive = isIndentSensitive(filename);
 	const normalize = (line: string) =>
 		normalizeCodeLine(line, { keepIndent: indentSensitive });
@@ -155,7 +165,10 @@ export function extractRuns(
 	let newLine = 0;
 	let delStart = 0;
 	let addStart = 0;
-	const flush = () => {
+	let region = 0;
+	let hunk = 0;
+	let awaiting: Run[] = [];
+	const flush = (after?: string) => {
 		if (del.length) {
 			deleted.push({
 				index: -1,
@@ -164,6 +177,10 @@ export function extractRuns(
 				lines: del,
 				raw: delRaw,
 				startLine: delStart,
+				region,
+				hunk,
+				after,
+				literalRisk,
 				used: del.map(() => false),
 			});
 		}
@@ -175,6 +192,10 @@ export function extractRuns(
 				lines: add,
 				raw: addRaw,
 				startLine: addStart,
+				region,
+				hunk,
+				after,
+				literalRisk,
 				used: add.map(() => false),
 			});
 		}
@@ -186,7 +207,11 @@ export function extractRuns(
 	for (const line of patch.split("\n")) {
 		if (line.startsWith("\\")) continue;
 		if (line.startsWith("-")) {
-			if (add.length) flush();
+			if (add.length) {
+				const first = added.length;
+				flush(line.slice(1));
+				awaiting.push(...added.slice(first));
+			}
 			if (!del.length) delStart = oldLine;
 			del.push(normalize(line.slice(1)));
 			delRaw.push(line.slice(1));
@@ -197,9 +222,14 @@ export function extractRuns(
 			addRaw.push(line.slice(1));
 			newLine++;
 		} else {
-			flush();
 			const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+			const after = header ? undefined : line.slice(1);
+			for (const run of awaiting) run.after = after;
+			awaiting = [];
+			flush(after);
+			region++;
 			if (header) {
+				hunk++;
 				oldLine = Number(header[1]);
 				newLine = Number(header[2]);
 			} else {
@@ -290,50 +320,98 @@ function extend(from: Run, fromPos: number, to: Run, toPos: number): Candidate {
 	};
 }
 
+/**
+ * `allowSameFile` also pairs a deleted and an added run of one file when they lie in
+ * different regions. `uniqueBelow` seeds windows shorter than that many counted lines only
+ * when the window occurs exactly once among the deleted runs and once among the added runs.
+ * `charge` is called before each candidate is extended, and discovery stops when it returns false.
+ */
+export interface MatchOptions {
+	allowSameFile?: boolean;
+	uniqueBelow?: number;
+	charge?: () => boolean;
+}
+
+interface SeedPlan {
+	size: number;
+	unique: boolean;
+}
+
+function seedPlans(minLines: number, options: MatchOptions): SeedPlan[] {
+	const plans: SeedPlan[] = [];
+	const top = options.uniqueBelow ?? minLines;
+	for (let size = minLines; size < top; size++)
+		plans.push({ size, unique: true });
+	plans.push({ size: Math.max(top, minLines), unique: false });
+	return plans;
+}
+
 function collectCandidates(
 	deleted: Run[],
 	added: Run[],
 	minLines: number,
+	accept?: (c: Candidate) => boolean,
+	options: MatchOptions = {},
 ): Candidate[] {
-	const index = new Map<string, { run: Run; pos: number }[]>();
-	for (const run of added) {
-		for (const [pos, key] of windowKeys(run, minLines)) {
-			const hits = index.get(key);
-			if (!hits) index.set(key, [{ run, pos }]);
-			else if (hits.length < MAX_KEY_OCCURRENCES) hits.push({ run, pos });
-		}
-	}
 	const seen = new Set<string>();
 	const coveredTo = new Map<string, number>();
 	const out: Candidate[] = [];
-	for (const run of deleted) {
-		const occurrences = new Map<string, number>();
-		for (const [pos, key] of windowKeys(run, minLines)) {
-			const n = (occurrences.get(key) ?? 0) + 1;
-			occurrences.set(key, n);
-			if (n > MAX_KEY_OCCURRENCES) continue;
-			for (const hit of index.get(key) ?? []) {
+	for (const plan of seedPlans(minLines, options)) {
+		const index = new Map<string, { run: Run; pos: number }[]>();
+		for (const run of added) {
+			for (const [pos, key] of windowKeys(run, plan.size)) {
+				const hits = index.get(key);
+				if (!hits) index.set(key, [{ run, pos }]);
+				else if (hits.length < MAX_KEY_OCCURRENCES) hits.push({ run, pos });
+			}
+		}
+		const totals = new Map<string, number>();
+		if (plan.unique) {
+			for (const run of deleted) {
+				for (const key of windowKeys(run, plan.size).values())
+					totals.set(key, (totals.get(key) ?? 0) + 1);
+			}
+		}
+		for (const run of deleted) {
+			const occurrences = new Map<string, number>();
+			for (const [pos, key] of windowKeys(run, plan.size)) {
+				const n = (occurrences.get(key) ?? 0) + 1;
+				occurrences.set(key, n);
+				if (n > MAX_KEY_OCCURRENCES) continue;
 				if (
-					hit.run.filename === run.filename ||
-					hit.run.indentSensitive !== run.indentSensitive
+					plan.unique &&
+					(totals.get(key) !== 1 || index.get(key)?.length !== 1)
 				)
 					continue;
-				const diagonal = `${run.index}|${hit.run.index}|${pos - hit.pos}`;
-				if (pos < (coveredTo.get(diagonal) ?? 0)) continue;
-				const c = extend(run, pos, hit.run, hit.pos);
-				coveredTo.set(diagonal, c.fromStart + c.length);
-				if (c.counted < minLines) continue;
-				const id = `${diagonal}|${c.fromStart}`;
-				if (seen.has(id)) continue;
-				seen.add(id);
-				out.push(c);
+				for (const hit of index.get(key) ?? []) {
+					if (hit.run.indentSensitive !== run.indentSensitive) continue;
+					if (
+						hit.run.filename === run.filename &&
+						(!options.allowSameFile || hit.run.region === run.region)
+					)
+						continue;
+					const diagonal = `${run.index}|${hit.run.index}|${pos - hit.pos}`;
+					if (pos < (coveredTo.get(diagonal) ?? 0)) continue;
+					if (options.charge && !options.charge()) return out;
+					const c = extend(run, pos, hit.run, hit.pos);
+					coveredTo.set(diagonal, c.fromStart + c.length);
+					if (c.counted < minLines || (accept && !accept(c))) continue;
+					const id = `${diagonal}|${c.fromStart}`;
+					if (seen.has(id)) continue;
+					seen.add(id);
+					out.push(c);
+				}
 			}
 		}
 	}
 	return out;
 }
 
-function unusedSegments(c: Candidate, minLines: number): Candidate[] {
+function unusedSegments(
+	c: Candidate,
+	minLines: number,
+	accept?: (c: Candidate) => boolean,
+): Candidate[] {
 	const out: Candidate[] = [];
 	let k = 0;
 	while (k < c.length) {
@@ -350,16 +428,15 @@ function unusedSegments(c: Candidate, minLines: number): Candidate[] {
 			k++;
 		}
 		const counted = countRange(c.from.lines, c.fromStart + start, k - start);
-		if (counted >= minLines) {
-			out.push({
-				from: c.from,
-				to: c.to,
-				fromStart: c.fromStart + start,
-				toStart: c.toStart + start,
-				length: k - start,
-				counted,
-			});
-		}
+		const part: Candidate = {
+			from: c.from,
+			to: c.to,
+			fromStart: c.fromStart + start,
+			toStart: c.toStart + start,
+			length: k - start,
+			counted,
+		};
+		if (counted >= minLines && (!accept || accept(part))) out.push(part);
 	}
 	return out;
 }
@@ -387,20 +464,31 @@ export function collectRuns(files: PushFile[]): {
 
 /**
  * Selects the non-overlapping exact matches of at least `minLines` counted lines, largest
- * first, and marks their lines used on both runs.
+ * first, and marks their lines used on both runs. `accept` further filters candidates and
+ * the unused parts of larger ones. With `options.uniqueBelow` the seed windows start at
+ * `minLines` and grow to that size, the shorter ones only when unique; with
+ * `options.allowSameFile` a run may pair with a run of its own file from another region.
  */
 export function selectMatches(
 	deleted: Run[],
 	added: Run[],
 	minLines: number,
+	accept?: (c: Candidate) => boolean,
+	options?: MatchOptions,
 ): Candidate[] {
 	const queue: Candidate[] = [];
-	for (const c of collectCandidates(deleted, added, minLines)) {
+	for (const c of collectCandidates(
+		deleted,
+		added,
+		minLines,
+		accept,
+		options,
+	)) {
 		insertSorted(queue, c);
 	}
 	const selected: Candidate[] = [];
 	for (let c = queue.pop(); c; c = queue.pop()) {
-		const free = unusedSegments(c, minLines);
+		const free = unusedSegments(c, minLines, accept);
 		if (free.length !== 1 || free[0]?.length !== c.length) {
 			for (const part of free) insertSorted(queue, part);
 			continue;

@@ -8,21 +8,25 @@ import {
 	type Run,
 	selectMatches,
 } from "../moved-blocks.js";
-import { lexicallySafe, normalizeSafe } from "./lexical.js";
+import { acceptSeed, MIN_COUNTED_LINES } from "./acceptance.js";
+import { type BudgetLimits, WorkBudget } from "./budget.js";
+import { findDeclarationMoves } from "./declarations.js";
+import {
+	lexicallySafe,
+	MAX_ANALYZED_LINE,
+	normalizeSafe,
+	similarity,
+	tokens,
+} from "./lexical.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
-const MIN_MEANINGFUL_LINES = 5;
 const MAX_DIVERGENCES = 3;
 const MAX_DIVERGENCE_SHARE = 0.2;
 const EDGE_SIMILARITY = 0.5;
 const MIN_COUNTED_LENGTH = 3;
-const MAX_ALIGNMENT_CELLS = 16_000_000;
 const MIN_RENAME_OCCURRENCES = 2;
-const MAX_TOKENIZED_LENGTH = 2000;
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
-const TOKEN =
-	/[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\S/g;
 const HASH_COMMENT_FILE =
 	/(?:\.(?:py|pyi|sh|bash|zsh|rb|ya?ml|toml|mk)|(?:^|\/)Makefile)$/i;
 const SLASH_LINE_FILE =
@@ -62,24 +66,15 @@ function isMeaningful(line: string): boolean {
 	return line.trim().length >= MIN_COUNTED_LENGTH;
 }
 
-function tokens(line: string): string[] {
-	return line.slice(0, MAX_TOKENIZED_LENGTH).match(TOKEN) ?? [];
-}
-
-function similarity(a: string, b: string): number {
-	const left = new Set(tokens(a));
-	const right = new Set(tokens(b));
-	let shared = 0;
-	for (const token of left) if (right.has(token)) shared++;
-	const union = left.size + right.size - shared;
-	return union === 0 ? 0 : shared / union;
-}
-
 /**
  * Longest-common-subsequence alignment. Returns the matched index pairs in order.
  * A common prefix and suffix are matched first so only the differing middle is tabulated.
  */
-function alignLines(base: string[], head: string[]): [number, number][] {
+function alignLines(
+	base: string[],
+	head: string[],
+	budget: WorkBudget,
+): [number, number][] {
 	const pairs: [number, number][] = [];
 	let lo = 0;
 	while (lo < base.length && lo < head.length && base[lo] === head[lo]) {
@@ -100,7 +95,7 @@ function alignLines(base: string[], head: string[]): [number, number][] {
 	}
 	const n = baseEnd - lo;
 	const m = headEnd - lo;
-	if (n > 0 && m > 0 && (n + 1) * (m + 1) <= MAX_ALIGNMENT_CELLS) {
+	if (n > 0 && m > 0 && budget.spendCells((n + 1) * (m + 1))) {
 		const width = m + 1;
 		const table = new Uint32Array((n + 1) * width);
 		for (let i = n - 1; i >= 0; i--) {
@@ -263,7 +258,7 @@ function renameIndexes(
 	baseLines: string[],
 	headLines: string[],
 ): Map<number, string[]> {
-	const oversized = (line: string) => line.length > MAX_TOKENIZED_LENGTH;
+	const oversized = (line: string) => line.length > MAX_ANALYZED_LINE;
 	if (baseLines.some(oversized) || headLines.some(oversized)) return new Map();
 	const perChange = changed.map((c) => substitutions(c.base, c.head));
 	const target = new Map<string, Set<string>>();
@@ -415,6 +410,7 @@ function limitFor(blockLines: number): number {
 function build(
 	chain: Candidate[],
 	withEdges: boolean,
+	budget: WorkBudget,
 	onlyRisky = false,
 ): Built {
 	const first = chain[0] as Candidate;
@@ -464,7 +460,7 @@ function build(
 	const aligned = divergencesBetween(
 		baseRaw.length,
 		headRaw.length,
-		alignLines(baseCmp, headCmp),
+		alignLines(baseCmp, headCmp, budget),
 	);
 	const raw = onlyRisky
 		? aligned.filter(
@@ -593,31 +589,52 @@ function claim(from: Run, to: Run, built: Built): void {
 	for (let j = built.toStart; j < built.toEnd; j++) to.used[j] = true;
 }
 
-function resolveChain(chain: Candidate[]): Operation[] {
+function resolveChain(chain: Candidate[], budget: WorkBudget): Operation[] {
 	const { from, to } = chain[0] as Candidate;
-	const whole = build(chain, true);
+	const whole = build(chain, true, budget);
 	if (whole.counted <= whole.limit) {
 		claim(from, to, whole);
 		return [toOperation(from, to, whole)];
 	}
-	if (chain.length > 1) return chain.flatMap((seed) => resolveChain([seed]));
-	const plain = build(chain, false, true);
+	if (chain.length > 1)
+		return chain.flatMap((seed) => resolveChain([seed], budget));
+	const plain = build(chain, false, budget, true);
 	claim(from, to, plain);
 	return [toOperation(from, to, plain)];
 }
 
 /**
- * Finds blocks of at least 5 meaningful lines that were deleted from one file and added to
- * another, tolerating a few changed, inserted or removed lines inside the block. Exact runs
- * seed each block; the block is then widened over the lines between and next to the seeds,
- * its two sides are aligned, and every line that does not align becomes a divergence
- * classed as comment-only, rename or code. A block that would need more than 3 differing
- * lines or 20 percent of its length is reported as its exact runs only. Lines are compared
- * raw wherever whitespace-insensitive comparison is not known to be safe.
+ * Files whose lines are not matched as relocations: lockfiles, minified bundles and snapshots.
+ * Regenerating them re-sorts large blocks, which reads as many same-file moves of no review value.
  */
-export function findRelocations(files: PushFile[]): Operation[] {
-	const { deleted, added } = collectRuns(files);
-	const seeds = selectMatches(deleted, added, MIN_MEANINGFUL_LINES);
+export const UNMATCHED_FILES =
+	/(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|[^/]+\.lock)$|\.min\.(?:js|css)$|\.snap$/;
+
+/**
+ * Finds blocks that were deleted from one region and added to another, across files or
+ * within one file, tolerating a few changed, inserted or removed lines inside the block. Exact runs
+ * seed each block, accepted by `acceptSeed`; the block is then widened over the lines between
+ * and next to the seeds, its two sides are aligned, and every line that does not align
+ * becomes a divergence classed as comment-only, rename or code. A block that would need more
+ * than 3 differing lines or 20 percent of its length is reported as its exact runs only.
+ * Lines are compared raw wherever whitespace-insensitive comparison is not known to be safe.
+ * One-line declarations are then paired by name. One `WorkBudget` covers the call, and when
+ * its pools run dry the pass stops silently and returns what it found.
+ */
+export function findRelocations(
+	files: PushFile[],
+	limits: Partial<BudgetLimits> = {},
+): Operation[] {
+	const { deleted, added } = collectRuns(
+		files.filter((f) => !UNMATCHED_FILES.test(f.filename)),
+	);
+	const budget = new WorkBudget(limits);
+	const ctx = { deleted, added, budget };
+	const seeds = selectMatches(deleted, added, 1, (c) => acceptSeed(c, ctx), {
+		allowSameFile: true,
+		uniqueBelow: MIN_COUNTED_LINES,
+		charge: () => budget.spendExtensions(1),
+	});
 	const groups = new Map<string, Candidate[]>();
 	for (const seed of seeds) {
 		const key = `${seed.from.index}|${seed.to.index}`;
@@ -629,7 +646,14 @@ export function findRelocations(files: PushFile[]): Operation[] {
 			size(b) - size(a) ||
 			(a[0] as Candidate).from.index - (b[0] as Candidate).from.index,
 	);
-	const operations = chains.flatMap(resolveChain);
+	const operations: Operation[] = [];
+	const seedsExhausted = budget.exhausted;
+	for (const chain of chains) {
+		if (!seedsExhausted && budget.exhausted) break;
+		operations.push(...resolveChain(chain, budget));
+	}
+	if (!budget.exhausted)
+		operations.push(...findDeclarationMoves(deleted, added, budget));
 	operations.sort(
 		(a, b) =>
 			compareText(a.from[0]?.filename, b.from[0]?.filename) ||

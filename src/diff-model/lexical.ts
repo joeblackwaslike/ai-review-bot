@@ -34,3 +34,30 @@ export function normalizeSafe(
 		? lines.map((line) => normalizeCodeLine(line))
 		: [...lines];
 }
+
+/** Longest line, in characters, that the matcher tokenizes or scans with a literal-aware pattern. */
+export const MAX_ANALYZED_LINE = 2000;
+
+const TOKEN =
+	/[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\S/g;
+const PROSE_FILE = /\.(md|mdx|txt|rst|adoc)$/i;
+
+/** True for documentation and plain-text files, where lines end in sentences rather than statements. */
+export function isProseFile(filename: string): boolean {
+	return PROSE_FILE.test(filename);
+}
+
+/** Tokens of the first `MAX_ANALYZED_LINE` characters of a line. */
+export function tokens(line: string): string[] {
+	return line.slice(0, MAX_ANALYZED_LINE).match(TOKEN) ?? [];
+}
+
+/** Jaccard similarity of the token sets of two lines, from 0 to 1. */
+export function similarity(a: string, b: string): number {
+	const left = new Set(tokens(a));
+	const right = new Set(tokens(b));
+	let shared = 0;
+	for (const token of left) if (right.has(token)) shared++;
+	const union = left.size + right.size - shared;
+	return union === 0 ? 0 : shared / union;
+}

@@ -1,0 +1,4 @@
+{
+	"title": "Share normalize_key between the account and device helpers",
+	"body": "Both helper modules carried their own copy of normalize_key. This keeps one copy in sync/keys.py. There is no functional change."
+}
