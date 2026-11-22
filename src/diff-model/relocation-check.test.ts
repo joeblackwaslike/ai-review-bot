@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { PushFile } from "../moved-blocks.js";
 import { buildDiffModel } from "./index.js";
 import { partialStatements } from "./partial-statements.fixture.js";
-import { READ_CASES, scaffold, WRITE_CASES } from "./receiver-cases.fixture.js";
+import {
+	AGREEMENT_LINES,
+	READ_CASES,
+	scaffold,
+	WRITE_CASES,
+} from "./receiver-cases.fixture.js";
 import { findRelocations } from "./relocation.js";
 import { verifyRelocation } from "./relocation-check.js";
 import type { Operation, Span } from "./types.js";
@@ -2553,4 +2558,165 @@ describe("verifyRelocation receiver positive rule", () => {
 		const heavier = { ...(op as Operation), reviewWeight: 3 };
 		expect(verifyRelocation(heavier, files)).toBe(false);
 	});
+});
+
+describe("plain relocations with receiver edits still verify", () => {
+	const body = (ext: string, line: string | string[]) => {
+		const py = ext === "py";
+		const before = py
+			? [
+					"rows = load_rows(items, n)",
+					"keys = build_keys(rows, items)",
+					"check_keys(keys, rows)",
+					"flush_keys(keys, rows, n)",
+				]
+			: [
+					"const rows = loadRows(items, n);",
+					"const keys = buildKeys(rows, items);",
+					"checkKeys(keys, rows);",
+					"flushKeys(keys, rows, n);",
+				];
+		const after = py
+			? [
+					"summary = summarize_rows(rows, keys)",
+					"report = render_summary(summary, n)",
+					"publish_report(report, items)",
+					"archive_report(report, n)",
+				]
+			: [
+					"const summary = summarizeRows(rows, keys);",
+					"const report = renderSummary(summary, n);",
+					"publishReport(report, items);",
+					"archiveReport(report, n);",
+				];
+		return [...before, ...(Array.isArray(line) ? line : [line]), ...after];
+	};
+
+	it.each(
+		AGREEMENT_LINES,
+	)("never drops a %s relocation changing %s", (ext, from, to) => {
+		const base = body(ext, from);
+		const head = body(ext, to);
+		const files = named(`a.${ext}`, `b.${ext}`, base, head);
+		for (const op of findRelocations(files).filter(
+			(o) => o.divergences.length > 0,
+		))
+			expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("never labels a multi-line write target a receiver difference on the plain path", () => {
+		for (const c of WRITE_CASES.filter((w) => w.base.length > 1)) {
+			const files = named(
+				`a.${c.lang}`,
+				`b.${c.lang}`,
+				body(c.lang, c.base),
+				body(c.lang, c.head),
+			);
+			for (const op of findRelocations(files)) {
+				expect(op.divergences.map((d) => d.class)).not.toContain("receiver");
+				if (!op.divergences.some((d) => d.class === "code")) continue;
+				const forged = reweighed({
+					...op,
+					divergences: op.divergences.map((d) =>
+						d.class === "code" ? { ...d, class: "receiver" as const } : d,
+					),
+				});
+				expect(verifyRelocation(forged, files)).toBe(false);
+			}
+		}
+	});
+
+	it("keeps a plain-path receiver label verifiable when a comment line sits elsewhere in the span", () => {
+		const base = body("ts", "return f(x);");
+		const head = body("ts", "return this.f(x);");
+		const withComment = (lines: string[]) => [
+			lines[0] as string,
+			"// keep",
+			...lines.slice(1),
+		];
+		const files = named("a.ts", "b.ts", withComment(base), withComment(head));
+		const ops = findRelocations(files).filter((o) => o.divergences.length > 0);
+		expect(ops.length).toBeGreaterThan(0);
+		for (const op of ops) expect(verifyRelocation(op, files)).toBe(true);
+	});
+
+	it("verifies a this. change on a line with a trailing comment as class code", () => {
+		const base = body("ts", "return f(x); // note");
+		const head = body("ts", "return this.f(x); // note");
+		const files = named("a.ts", "b.ts", base, head);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		const op = ops[0] as Operation;
+		expect(op.divergences.map((d) => d.class)).toEqual(["code"]);
+		expect(verifyRelocation(op, files)).toBe(true);
+	});
+});
+
+describe("prototype-named extension files are never reshape claims", () => {
+	it.each([
+		"constructor",
+		"__proto__",
+		"toString",
+		"hasOwnProperty",
+	])("drops a forged reshape claim on x.%s", (ext) => {
+		const { files, op } = claim("a.py", "b.py", PY_FUNCTION, PY_METHOD);
+		expect(verifyRelocation(op, files)).toBe(true);
+		const swap = <T>(value: T): T =>
+			JSON.parse(
+				JSON.stringify(value)
+					.replaceAll("a.py", `x.${ext}`)
+					.replaceAll("b.py", `y.${ext}`),
+			);
+		expect(verifyRelocation(swap(op), swap(files))).toBe(false);
+	});
+
+	it.each([
+		"constructor",
+		"__proto__",
+		"toString",
+		"hasOwnProperty",
+	])("never emits a reshape claim for x.%s", (ext) => {
+		const ops = findRelocations(
+			named(`x.${ext}`, `y.${ext}`, PY_FUNCTION, PY_METHOD),
+		);
+		expect(
+			ops.some((o) =>
+				o.divergences.some(
+					(d) => d.class === "signature" || d.class === "receiver",
+				),
+			),
+		).toBe(false);
+	});
+});
+
+describe("verifyRelocation running depth scan", () => {
+	const manyLines = (count: number) => {
+		const calls = Array.from(
+			{ length: count },
+			(_, i) => `step${i}(items, n, ${i})`,
+		);
+		return {
+			base: ["def run(items, n):", ...calls.map((l) => `    ${l}`)],
+			head: [
+				"    def run(self, items, n):",
+				...calls.map((l) => `        self.${l}`),
+			],
+		};
+	};
+
+	it("stays roughly linear from 1000 to 2000 body lines", () => {
+		const time = (count: number) => {
+			const { base, head } = manyLines(count);
+			const files = named("a.py", "b.py", base, head);
+			const started = performance.now();
+			const ops = findRelocations(files);
+			for (const op of ops) verifyRelocation(op, files);
+			return performance.now() - started;
+		};
+		time(200);
+		const half = time(1000);
+		const full = time(2000);
+		expect(full).toBeLessThan(3000);
+		expect(full).toBeLessThan(half * 6 + 200);
+	}, 15000);
 });

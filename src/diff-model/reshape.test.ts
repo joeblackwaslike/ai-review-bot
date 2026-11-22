@@ -1022,3 +1022,37 @@ describe("reshape receiver positive rule", () => {
 		}
 	});
 });
+
+describe("reshape in files that may hold JSX", () => {
+	const fn = [
+		"function run(items, n) {",
+		"  const rows = loadRows(items, n);",
+		"  const view = <b>{rows.length}</b>;",
+		"  checkRows(rows, items);",
+		"  flushRows(rows, n);",
+		"  return finish(view, n);",
+		"}",
+	];
+	const method = [
+		"  run(items, n) {",
+		"    const rows = this.loadRows(items, n);",
+		"    const view = <b>{rows.length}</b>;",
+		"    this.checkRows(rows, items);",
+		"    this.flushRows(rows, n);",
+		"    return this.finish(view, n);",
+		"  }",
+	];
+
+	it.each([
+		"js",
+		"mjs",
+		"cjs",
+		"jsx",
+		"tsx",
+	])("makes no reshape claim in a .%s block with JSX text", (ext) => {
+		const ops = move(`a.${ext}`, `b.${ext}`, fn, method);
+		expect(
+			ops.some((o) => o.divergences.some((d) => d.class === "signature")),
+		).toBe(false);
+	});
+});

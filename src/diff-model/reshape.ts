@@ -22,16 +22,33 @@ const MIN_COUNTED_LENGTH = 3;
 const MAX_OPENER_LINE = 400;
 const PYTHON = new Set(["py", "pyi"]);
 /**
- * Receiver prefixes per extension. token-check.ts keeps its own copy (RESHAPE_RECEIVERS)
- * so the checker stays independent of the matcher; reshape.test.ts pins the two together.
+ * Receiver prefixes per extension, as maps so an extension such as `constructor` never
+ * resolves through the prototype. token-check.ts keeps its own copy (RESHAPE_RECEIVERS) so
+ * the checker stays independent of the matcher; the table pin test in token-check.test.ts
+ * compares the two.
  */
-const RECEIVERS: Record<string, Record<string, string>> = {
-	py: { self: ".", cls: "." },
-	pyi: { self: ".", cls: "." },
-	...Object.fromEntries(
-		"js jsx mjs cjs ts tsx".split(" ").map((ext) => [ext, { this: "." }]),
+export const RECEIVERS: ReadonlyMap<
+	string,
+	ReadonlyMap<string, string>
+> = new Map([
+	[
+		"py",
+		new Map([
+			["self", "."],
+			["cls", "."],
+		]),
+	],
+	[
+		"pyi",
+		new Map([
+			["self", "."],
+			["cls", "."],
+		]),
+	],
+	...["js", "jsx", "mjs", "cjs", "ts", "tsx"].map(
+		(ext) => [ext, new Map([["this", "."]])] as const,
 	),
-};
+]);
 const PYTHON_OPENER = /^\s*(?:async\s+)?def\s+\w/;
 const CONTROL =
 	/^\s*(?:if|else|for|while|switch|catch|try|do|return|throw|new|with|using|await|yield|case)\b/;
@@ -49,6 +66,26 @@ const ASSIGNMENT = new Set(
 	"= += -= *= /= %= **= //= &= |= ^= <<= >>= >>>= &&= ||= ??= :=".split(" "),
 );
 const DECORATOR = /^\s*@[\w.$]+/;
+const MAX_RECEIVER_LINE = 2000;
+const NOT_PLAIN = new RegExp(
+	[
+		"[^\\p{ASCII}]",
+		"`",
+		'"{3}',
+		"'{3}",
+		"<<",
+		"<!--",
+		"-->",
+		"/",
+		"#",
+		"[\\r\\v\\f]",
+		"\\b[rR]?[fF][rR]?[\"']",
+	].join("|"),
+	"u",
+);
+const JSX_TEXT = /<[A-Za-z][\w.-]*[\s>/]|<\/|\/>|<>/;
+const CONTINUATION =
+	/^(?:[=.[(?:,+\-*/%&|^<>!~]|(?:and|or|if|else|in|is|not|for)\b)/;
 
 interface LineRange {
 	start: number;
@@ -100,7 +137,7 @@ export function signatureRange(
 	filename: string,
 ): LineRange | null {
 	const ext = extension(filename);
-	if (!RECEIVERS[ext]) return null;
+	if (!RECEIVERS.has(ext)) return null;
 	const end = lines.length - 1;
 	if (end < 0) return null;
 	for (let s = end; s >= Math.max(0, end - MAX_SIGNATURE_LINES + 1); s--) {
@@ -225,20 +262,121 @@ function signatureDivergences(
 	];
 }
 
+/** What a receiver classification needs to know about one changed line pair. */
+interface ReceiverLine {
+	rawBase: string;
+	rawHead: string;
+	baseFile: string;
+	headFile: string;
+	boundary: boolean;
+}
+
+/**
+ * Whether a line is plain enough for the checker to read: ASCII only, no comment marker,
+ * template literal, triple quote, heredoc, slash (division, regex or comment), hash,
+ * f-string prefix or odd line break, at most 2000 characters, and no JSX text. The checker
+ * refuses everything here, so a line failing it is never labelled `receiver`.
+ */
+function plainLine(raw: string, filename: string): boolean {
+	if (raw.length > MAX_RECEIVER_LINE || NOT_PLAIN.test(raw)) return false;
+	const ext = extension(filename);
+	if (ext === "jsx" || ext === "tsx") return false;
+	return !(["js", "mjs", "cjs"].includes(ext) && JSX_TEXT.test(raw));
+}
+
+/** Whether a block cannot hold JSX, which the checker refuses to read. */
+function jsxFree(filename: string, lines: readonly string[]): boolean {
+	const ext = extension(filename);
+	if (ext === "jsx" || ext === "tsx") return false;
+	return !(
+		["js", "mjs", "cjs"].includes(ext) && JSX_TEXT.test(lines.join("\n"))
+	);
+}
+
+/** Running bracket depth at the start and end of each line of a body. */
+export interface LineDepths {
+	start: number[];
+	end: number[];
+}
+
+/**
+ * Tokenizes `lines` once and records the bracket depth (`(` and `[`; braces open blocks as often as literals) carried into and
+ * out of every line, so a statement that spans lines can be told from a complete one. Null
+ * outside the reshape languages and when any line is not plain, because the checker cannot
+ * tokenize such a span and would refuse every receiver label in it.
+ */
+export function lineDepths(
+	lines: readonly string[],
+	filename: string,
+): LineDepths | null {
+	if (!RECEIVERS.has(extension(filename))) return null;
+	if (lines.some((line) => !plainLine(line, filename))) return null;
+	const { tokens, lineOf } = tokenize(lines, filename);
+	const start = lines.map(() => 0);
+	const end = lines.map(() => 0);
+	const seen = lines.map(() => false);
+	let depth = 0;
+	tokens.forEach((t, k) => {
+		const l = lineOf[k] as number;
+		if (!seen[l]) {
+			seen[l] = true;
+			start[l] = depth;
+		}
+		if (t === "(" || t === "[") depth++;
+		else if (t === ")" || t === "]") depth--;
+		end[l] = depth;
+	});
+	let carry = 0;
+	for (let l = 0; l < lines.length; l++) {
+		if (seen[l]) carry = end[l] as number;
+		else {
+			start[l] = carry;
+			end[l] = carry;
+		}
+	}
+	return { start, end };
+}
+
+/**
+ * Whether line `at` of `lines` ends a statement on its own: the running depth is 0 on
+ * entry and on exit, and the next non-blank line does not start with a continuation token
+ * (an operator, `=`, `.`, `[`, `(`, `,` or a word such as `and`, `else` or `for`).
+ */
+export function statementBoundary(
+	lines: readonly string[],
+	depths: LineDepths | null,
+	at: number,
+): boolean {
+	if (!depths || depths.start[at] !== 0 || depths.end[at] !== 0) return false;
+	return !continuesNext(lines, at);
+}
+
+/** Whether the next non-blank line after `at` starts with a continuation token. */
+export function continuesNext(lines: readonly string[], at: number): boolean {
+	for (let n = at + 1; n < lines.length; n++) {
+		const next = (lines[n] as string).trim();
+		if (next !== "") return CONTINUATION.test(next);
+	}
+	return false;
+}
+
 /**
  * Whether a physical line is a complete read-only line: it starts with a name and ends
  * with a name, literal or closing bracket, its brackets balance within the line, it has no
  * trailing backslash, no unclosed string, no assignment of any kind, no `++` or `--`, no
  * `;` except as the last token, no braces, and none of the keywords that bind or rebind a
  * name (for, del, as, with, lambda, ...). It must also be a `return` or hold a call, so a
- * bare name or a fragment of a longer statement never qualifies.
+ * bare name or a fragment of a longer statement never qualifies, and it must end its
+ * statement (`boundary`) and be plain enough for the checker (`plainLine`).
  */
-function readOnlyLine(
-	tokens: readonly string[],
-	rawBase: string,
-	rawHead: string,
-): boolean {
-	if ([rawBase, rawHead].some((raw) => raw.trimEnd().endsWith("\\")))
+function readOnlyLine(tokens: readonly string[], line: ReceiverLine): boolean {
+	if (!line.boundary) return false;
+	if (
+		!plainLine(line.rawBase, line.baseFile) ||
+		!plainLine(line.rawHead, line.headFile)
+	)
+		return false;
+	if ([line.rawBase, line.rawHead].some((raw) => raw.trimEnd().endsWith("\\")))
 		return false;
 	const all = tokens.filter((t) => t !== "\n");
 	const last = all.length - 1;
@@ -272,8 +410,7 @@ function receiverClass(
 	tokens: readonly string[],
 	baseDropped: readonly string[],
 	headDropped: readonly string[],
-	rawBase: string,
-	rawHead: string,
+	line: ReceiverLine,
 ): "receiver" | "code" {
 	let lost = false;
 	let gained = false;
@@ -283,11 +420,17 @@ function receiverClass(
 		if (!baseDropped[k] && headDropped[k]) gained = true;
 	}
 	if (lost && gained) return "code";
-	return readOnlyLine(tokens, rawBase, rawHead) ? "receiver" : "code";
+	return readOnlyLine(tokens, line) ? "receiver" : "code";
 }
 
 function receiverDivergences(m: Match): Divergence[] {
 	const { d, a, di, ai, len } = m.range;
+	const baseBody = d.run.raw.slice(m.dFirst);
+	const headBody = a.run.raw.slice(m.aFirst);
+	const depths = lineDepths(
+		d.run.raw.slice(m.dFirst, m.dLast + 1),
+		d.run.filename,
+	);
 	const lines = new Map<string, number[]>();
 	for (let k = 0; k < len; k++) {
 		const key = `${d.lineOf[di + k]}|${a.lineOf[ai + k]}`;
@@ -303,8 +446,15 @@ function receiverDivergences(m: Match): Divergence[] {
 			ks.map((k) => d.tokens[di + k] as string),
 			ks.map((k) => d.dropped[di + k] as string),
 			ks.map((k) => a.dropped[ai + k] as string),
-			d.run.raw[d.start + bl] as string,
-			a.run.raw[a.start + hl] as string,
+			{
+				rawBase: d.run.raw[d.start + bl] as string,
+				rawHead: a.run.raw[a.start + hl] as string,
+				baseFile: d.run.filename,
+				headFile: a.run.filename,
+				boundary:
+					statementBoundary(baseBody, depths, d.start + bl - m.dFirst) &&
+					!continuesNext(headBody, a.start + hl - m.aFirst),
+			},
 		);
 		out.push(
 			lineDivergence("changed", cls, d.start + bl, a.start + hl, d.run, a.run),
@@ -314,16 +464,16 @@ function receiverDivergences(m: Match): Divergence[] {
 }
 
 const receiverLens: Lens = {
-	accepts: (filename) => RECEIVERS[extension(filename)] !== undefined,
+	accepts: (filename) => RECEIVERS.has(extension(filename)),
 	strip(tokens, lineOf, filename) {
-		const rules = RECEIVERS[extension(filename)] ?? {};
+		const rules = RECEIVERS.get(extension(filename));
 		const out: string[] = [];
 		const outLine: number[] = [];
 		const dropped: string[] = [];
 		let pending = "";
 		for (let k = 0; k < tokens.length; k++) {
 			const t = tokens[k] as string;
-			const sep = rules[t];
+			const sep = rules?.get(t);
 			const before = tokens[k - 1];
 			const after = tokens[k + 2];
 			if (
@@ -369,6 +519,11 @@ function reshape(m: Match): Operation | null {
 	const opensHead = head.end < m.aFirst && opensBrace(a.run, head);
 	if (!balanced(d, di, len, opensBase) || !balanced(a, ai, len, opensHead))
 		return null;
+	const blocks: [string, readonly string[]][] = [
+		[d.run.filename, d.run.raw.slice(fromStart, m.dLast + 1)],
+		[a.run.filename, a.run.raw.slice(toStart, m.aLast + 1)],
+	];
+	if (blocks.some(([file, lines]) => !jsxFree(file, lines))) return null;
 	const receivers = receiverDivergences(m);
 	const same = signatureTokens(d.run, base) === signatureTokens(a.run, head);
 	if (same && receivers.length === 0) return null;
@@ -414,6 +569,7 @@ export function receiverChangeClass(
 	head: string,
 	baseFilename: string,
 	headFilename: string,
+	boundary = true,
 ): "receiver" | "code" | null {
 	if (
 		!receiverLens.accepts(baseFilename) ||
@@ -433,7 +589,13 @@ export function receiverChangeClass(
 	const key = (xs: string[]) => xs.join("\u0001");
 	if (key(b.tokens) !== key(h.tokens) || key(b.dropped) === key(h.dropped))
 		return null;
-	return receiverClass(b.tokens, b.dropped, h.dropped, base, head);
+	return receiverClass(b.tokens, b.dropped, h.dropped, {
+		rawBase: base,
+		rawHead: head,
+		baseFile: baseFilename,
+		headFile: headFilename,
+		boundary,
+	});
 }
 
 function reshapeWeight(divergences: Divergence[]): number {
@@ -469,7 +631,7 @@ export function findReshapes(
 	const ctx = { deleted, added, budget };
 	const out: Operation[] = [];
 	const defines = (run: Run) =>
-		RECEIVERS[extension(run.filename)] !== undefined &&
+		RECEIVERS.has(extension(run.filename)) &&
 		run.raw.some((line) => isOpener(line, extension(run.filename)));
 	const from = deleted.filter(defines);
 	const to = added.filter(defines);

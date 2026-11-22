@@ -19,7 +19,13 @@ import {
 	similarity,
 	tokens,
 } from "./lexical.js";
-import { findReshapes, receiverChangeClass } from "./reshape.js";
+import {
+	continuesNext,
+	findReshapes,
+	lineDepths,
+	receiverChangeClass,
+	statementBoundary,
+} from "./reshape.js";
 import { filesWithLiterals, findTokenOperations } from "./token-pass.js";
 import type { Divergence, DivergenceClass, Operation, Span } from "./types.js";
 
@@ -488,6 +494,7 @@ function build(
 	const renames = renameIndexes(changed, baseRaw, headRaw);
 	const trailing =
 		SLASH_LINE_FILE.test(from.filename) && SLASH_LINE_FILE.test(to.filename);
+	const baseDepths = lineDepths(baseRaw, from.filename);
 	let counted = 0;
 	const renamedNames = new Set<string>();
 	const divergences = raw.map((d, at): Divergence => {
@@ -510,6 +517,8 @@ function build(
 							headText as string,
 							from.filename,
 							to.filename,
+							statementBoundary(baseRaw, baseDepths, d.baseIndex as number) &&
+								!continuesNext(headRaw, d.headIndex as number),
 						)) ||
 					"code";
 		if (cls === "rename")

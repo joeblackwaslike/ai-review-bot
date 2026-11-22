@@ -548,16 +548,36 @@ export function tokenEquivalent(
 }
 
 /**
- * Receiver prefixes per extension. reshape.ts keeps its own copy (RECEIVERS) so the checker
- * stays independent of the matcher; reshape.test.ts pins the two together.
+ * Receiver prefixes per extension, as maps so an extension such as `constructor` never
+ * resolves through the prototype. reshape.ts keeps its own copy (RECEIVERS) so the checker
+ * stays independent of the matcher; the table pin test in token-check.test.ts compares
+ * the two.
  */
-const RESHAPE_RECEIVERS: Record<string, Record<string, string>> = {
-	py: { self: ".", cls: "." },
-	pyi: { self: ".", cls: "." },
-	...Object.fromEntries(
-		"js jsx mjs cjs ts tsx".split(" ").map((ext) => [ext, { this: "." }]),
-	),
-};
+export const RESHAPE_RECEIVERS: ReadonlyMap<
+	string,
+	ReadonlyMap<string, string>
+> = new Map<string, ReadonlyMap<string, string>>([
+	[
+		"py",
+		new Map([
+			["self", "."],
+			["cls", "."],
+		]),
+	],
+	[
+		"pyi",
+		new Map([
+			["self", "."],
+			["cls", "."],
+		]),
+	],
+	["js", new Map([["this", "."]])],
+	["jsx", new Map([["this", "."]])],
+	["mjs", new Map([["this", "."]])],
+	["cjs", new Map([["this", "."]])],
+	["ts", new Map([["this", "."]])],
+	["tsx", new Map([["this", "."]])],
+]);
 const MAX_SIGNATURE_LINES = 16;
 const PY_DEF = /^\s*(?:async\s+)?def\s+\w/;
 const NOT_A_DEFINITION =
@@ -569,6 +589,8 @@ const METHOD_DEFINITION =
 const MAX_OPENER_LINE = 400;
 const BINDING_WORD =
 	/^(?:for|while|del|delete|as|in|of|with|lambda|global|nonlocal|yield|import|from|class|def|function|\+\+|--|\{|\})$/;
+const CONTINUES_STATEMENT =
+	/^(?:[-=.[(?:,+*/%&|^<>!~]|(?:and|or|if|else|in|is|not|for)(?![\w$]))/;
 const NAME_START = /^[\p{L}_$]/u;
 const VALUE_END = /^[\p{L}\p{N}_$"')\]]/u;
 const ASSIGNMENT_TOKEN = /^(?:\*\*|\/\/|<<|>>>?|&&|\|\||\?\?|[-+*/%&|^:])?=$/;
@@ -585,12 +607,12 @@ function stripReceivers(
 	lineOf: number[],
 	ext: string,
 ): Stripped {
-	const rules = RESHAPE_RECEIVERS[ext] ?? {};
+	const rules = RESHAPE_RECEIVERS.get(ext);
 	const out: Stripped = { tokens: [], lineOf: [], dropped: [] };
 	let pending = "";
 	for (let k = 0; k < tokens.length; k++) {
 		const t = tokens[k] as string;
-		const sep = rules[t];
+		const sep = rules?.get(t);
 		const next = tokens[k + 2];
 		const before = tokens[k - 1];
 		if (
@@ -621,7 +643,7 @@ function reshapeExtensions(
 ): [string, string] | null {
 	const base = extensionOf(baseFile);
 	const head = extensionOf(headFile);
-	if (!RESHAPE_RECEIVERS[base] || !RESHAPE_RECEIVERS[head]) return null;
+	if (!RESHAPE_RECEIVERS.has(base) || !RESHAPE_RECEIVERS.has(head)) return null;
 	if (FAMILY_OF.get(base) !== FAMILY_OF.get(head)) return null;
 	if (jsxPossible(baseFile, baseLines.join("\n"))) return null;
 	if (jsxPossible(headFile, headLines.join("\n"))) return null;
@@ -670,6 +692,7 @@ function receiverKind(
 	headDropped: string[],
 	rawBase: string,
 	rawHead: string,
+	boundary: boolean,
 ): "receiver" | "code" | null {
 	const differing = tokens.flatMap((_, k) =>
 		baseDropped[k] === headDropped[k] ? [] : [k],
@@ -678,7 +701,7 @@ function receiverKind(
 	const lost = differing.some((k) => baseDropped[k] && !headDropped[k]);
 	const gained = differing.some((k) => !baseDropped[k] && headDropped[k]);
 	if (lost && gained) return "code";
-	return readsOnly(tokens, rawBase, rawHead) ? "receiver" : "code";
+	return boundary && readsOnly(tokens, rawBase, rawHead) ? "receiver" : "code";
 }
 
 function readsOnly(
@@ -706,6 +729,84 @@ function readsOnly(
 	return stack.length === 0 && (head === "return" || body.includes("("));
 }
 
+function startsContinuation(lines: readonly string[], at: number): boolean {
+	const next = lines.slice(at + 1).find((l) => l.trim() !== "");
+	return next !== undefined && CONTINUES_STATEMENT.test(next.trim());
+}
+
+interface Depths {
+	start: number[];
+	end: number[];
+}
+
+function depthsOfTokens(
+	tokens: readonly string[],
+	lineOf: readonly number[],
+	lineCount: number,
+): Depths {
+	const start: number[] = Array(lineCount).fill(Number.NaN);
+	const end: number[] = Array(lineCount).fill(Number.NaN);
+	let depth = 0;
+	tokens.forEach((t, k) => {
+		const line = lineOf[k] as number;
+		if (Number.isNaN(start[line] as number)) start[line] = depth;
+		if (t === "(" || t === "[") depth += 1;
+		else if (t === ")" || t === "]") depth -= 1;
+		end[line] = depth;
+	});
+	let carry = 0;
+	for (let line = 0; line < lineCount; line++) {
+		if (Number.isNaN(start[line] as number)) {
+			start[line] = carry;
+			end[line] = carry;
+		}
+		carry = end[line] as number;
+	}
+	return { start, end };
+}
+
+const spanDepths = new WeakMap<readonly string[], Depths | null>();
+
+function depthsOfSpan(lines: string[], ext: string): Depths | null {
+	if (spanDepths.has(lines)) return spanDepths.get(lines) ?? null;
+	const found = tokenizeLines(lines, ext);
+	const depths = found
+		? depthsOfTokens(found.tokens, found.lineOf, lines.length)
+		: null;
+	spanDepths.set(lines, depths);
+	return depths;
+}
+
+/**
+ * Whether line `baseAt` of the base span and line `headAt` of the head span differ only by
+ * a receiver prefix and each ends its statement: the running bracket depth over the whole
+ * span is 0 on entry and exit, and the next non-blank line of either span does not start
+ * with a continuation token. False when the span cannot be tokenized.
+ */
+export function receiverLineInContext(
+	baseLines: string[],
+	baseAt: number,
+	headLines: string[],
+	headAt: number,
+	baseFile: string,
+	headFile: string,
+): boolean {
+	const depths = depthsOfSpan(baseLines, extensionOf(baseFile));
+	const boundary =
+		depths !== null &&
+		depths.start[baseAt] === 0 &&
+		depths.end[baseAt] === 0 &&
+		!startsContinuation(baseLines, baseAt) &&
+		!startsContinuation(headLines, headAt);
+	return receiverOnlyLine(
+		baseLines[baseAt] as string,
+		headLines[headAt] as string,
+		baseFile,
+		headFile,
+		boundary,
+	);
+}
+
 /**
  * Whether two single lines differ only by a receiver prefix that does not touch state
  * meaning: equal tokens once `self.`/`cls.` (py pyi) or `this.` (js jsx mjs cjs ts tsx)
@@ -719,6 +820,7 @@ export function receiverOnlyLine(
 	head: string,
 	baseFile: string,
 	headFile: string,
+	boundary = true,
 ): boolean {
 	const exts = reshapeExtensions(baseFile, [base], headFile, [head]);
 	if (!exts) return false;
@@ -727,7 +829,8 @@ export function receiverOnlyLine(
 	if (!b || !h) return false;
 	return (
 		sameTokens(b.tokens, h.tokens) &&
-		receiverKind(b.tokens, b.droppedAt, h.droppedAt, base, head) === "receiver"
+		receiverKind(b.tokens, b.droppedAt, h.droppedAt, base, head, boundary) ===
+			"receiver"
 	);
 }
 
@@ -762,7 +865,7 @@ export function leadingSignature(
 	filename: string,
 ): SignatureShape | null {
 	const ext = extensionOf(filename);
-	if (!RESHAPE_RECEIVERS[ext]) return null;
+	if (!RESHAPE_RECEIVERS.has(ext)) return null;
 	if (jsxPossible(filename, lines.join("\n"))) return null;
 	let decorators = 0;
 	while (
@@ -855,6 +958,7 @@ export function reshapeEquivalent(
 	});
 	const pairs: [number, number][] = [];
 	const codePairs: [number, number][] = [];
+	const depths = depthsOfTokens(b.tokens, b.lineOf, base.lines.length);
 	for (const [key, ks] of groups) {
 		const pair = key.split("|").map(Number) as [number, number];
 		const kind = receiverKind(
@@ -863,6 +967,10 @@ export function reshapeEquivalent(
 			ks.map((k) => h.droppedAt[k] as string),
 			base.lines[pair[0]] as string,
 			head.lines[pair[1]] as string,
+			depths.start[pair[0]] === 0 &&
+				depths.end[pair[0]] === 0 &&
+				!startsContinuation(base.lines, pair[0]) &&
+				!startsContinuation(head.lines, pair[1]),
 		);
 		if (kind === null) continue;
 		pairs.push(pair);

@@ -5,7 +5,7 @@ import {
 	jsxPossible,
 	leadingSignature,
 	opensUnclosedString,
-	receiverOnlyLine,
+	receiverLineInContext,
 	reshapeEquivalent,
 	tokenEquivalent,
 	unbalancedBlockComment,
@@ -682,7 +682,7 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 			return false;
 		if (
 			divergence.class === "receiver" &&
-			!receiverLineHolds(divergence, baseLine, headLine)
+			!receiverLineHolds(divergence, base, head)
 		)
 			return false;
 	}
@@ -705,13 +705,25 @@ export function verifyRelocation(op: Operation, files: PushFile[]): boolean {
 
 function receiverLineHolds(
 	divergence: Divergence,
-	base: string | null | undefined,
-	head: string | null | undefined,
+	base: Side[],
+	head: Side[],
 ): boolean {
 	const { base: from, head: to } = divergence;
 	if (divergence.kind !== "changed" || !from || !to) return false;
-	if (typeof base !== "string" || typeof head !== "string") return false;
-	return receiverOnlyLine(base, head, from.filename, to.filename);
+	const baseSide = base.find((s) => s.filename === from.filename);
+	const headSide = head.find((s) => s.filename === to.filename);
+	if (!baseSide || !headSide) return false;
+	const baseAt = baseSide.positions.indexOf(from.startLine);
+	const headAt = headSide.positions.indexOf(to.startLine);
+	if (baseAt < 0 || headAt < 0) return false;
+	return receiverLineInContext(
+		baseSide.lines,
+		baseAt,
+		headSide.lines,
+		headAt,
+		from.filename,
+		to.filename,
+	);
 }
 
 function tokenVerified(

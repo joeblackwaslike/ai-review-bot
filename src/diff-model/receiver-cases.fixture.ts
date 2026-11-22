@@ -120,6 +120,18 @@ export const WRITE_CASES: ReceiverCase[] = [
 		base: ["foo(", "  this.a,", "  b);"],
 		head: ["foo(", "  a,", "  this.b);"],
 	},
+	{
+		name: "member target with the assignment on the next line",
+		lang: "ts",
+		base: ["getObj(n).count", "  = n;"],
+		head: ["this.getObj(n).count", "  = n;"],
+	},
+	{
+		name: "subscript target with the assignment after the bracket",
+		lang: "py",
+		base: ["items[", "    key1(n)", "] = n"],
+		head: ["items[", "    self.key1(n)", "] = n"],
+	},
 ];
 export const READ_CASES: ReceiverCase[] = [
 	{
@@ -139,6 +151,12 @@ export const READ_CASES: ReceiverCase[] = [
 		lang: "py",
 		base: ["process(a, b, c, d)"],
 		head: ["self.process(a, b, c, d)"],
+	},
+	{
+		name: "a call followed by an ordinary statement",
+		lang: "py",
+		base: ["log(name, n)", "flush(n)"],
+		head: ["log(self.name, n)", "flush(n)"],
 	},
 ];
 
@@ -165,3 +183,28 @@ export function scaffold(c: ReceiverCase, side: "base" | "head"): string[] {
 				"  }",
 			];
 }
+
+/** [extension, base line, head line] pairs where the matcher and the checker must agree. */
+export const AGREEMENT_LINES: [string, string, string][] = [
+	["py", "return rate * n", "return self.rate * n"],
+	["py", "return rate * n  # note", "return self.rate * n  # note"],
+	["py", "log(name, n)  # trailing", "log(self.name, n)  # trailing"],
+	["py", 'print(f"{name}")', 'print(f"{self.name}")'],
+	["py", 'log("""doc""", name, n)', 'log("""doc""", self.name, n)'],
+	["py", "return caf\u00e9(n)", "return self.caf\u00e9(n)"],
+	["py", "log(name, n)\u00a0", "log(self.name, n)\u00a0"],
+	["py", "return ratio(a) / 2", "return self.ratio(a) / 2"],
+	["py", "log(name, n)", "log(self.name, n)"],
+	["ts", "return f(x); // note", "return this.f(x); // note"],
+	["ts", "f(x); /* note */", "this.f(x); /* note */"],
+	["ts", "f(`a ${x}`);", "this.f(`a ${x}`);"],
+	["ts", "return f(x) / 2;", "return this.f(x) / 2;"],
+	["ts", "f(/a+/);", "this.f(/a+/);"],
+	["ts", "return f(x);", "return this.f(x);"],
+	["tsx", "return f(x);", "return this.f(x);"],
+	["jsx", "return <div>{f(x)}</div>;", "return <div>{this.f(x)}</div>;"],
+	["js", "return <div>{f(x)}</div>;", "return <div>{this.f(x)}</div>;"],
+	["js", "return f(x) < g(y);", "return this.f(x) < g(y);"],
+	["js", "f(x);", "this.f(x);"],
+	["ts", "f(\u00e9);", "this.f(\u00e9);"],
+];

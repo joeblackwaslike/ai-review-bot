@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { READ_CASES, WRITE_CASES } from "./receiver-cases.fixture.js";
-import { receiverChangeClass, signatureRange } from "./reshape.js";
+import {
+	AGREEMENT_LINES,
+	READ_CASES,
+	WRITE_CASES,
+} from "./receiver-cases.fixture.js";
+import { RECEIVERS, receiverChangeClass, signatureRange } from "./reshape.js";
 import {
 	leadingSignature,
+	RESHAPE_RECEIVERS,
 	receiverOnlyLine,
 	reshapeEquivalent,
 	tokenEquivalent,
@@ -683,5 +688,62 @@ describe("each clause of the receiver positive rule on its own", () => {
 		const file = `f.${ext}`;
 		expect(receiverOnlyLine(from, to, file, file)).toBe(false);
 		expect(receiverChangeClass(from, to, file, file)).not.toBe("receiver");
+	});
+});
+
+describe("receiver tables", () => {
+	it("pins the matcher table to the checker table", () => {
+		const flat = (table: ReadonlyMap<string, ReadonlyMap<string, string>>) =>
+			[...table].map(([ext, rules]) => [ext, [...rules]]).sort();
+		expect(flat(RECEIVERS)).toEqual(flat(RESHAPE_RECEIVERS));
+		expect([...RECEIVERS.keys()].sort()).toEqual([
+			"cjs",
+			"js",
+			"jsx",
+			"mjs",
+			"py",
+			"pyi",
+			"ts",
+			"tsx",
+		]);
+	});
+});
+
+describe("prototype-named extensions", () => {
+	const names = ["constructor", "__proto__", "toString", "hasOwnProperty"];
+
+	it.each(names)("never treats x.%s as a reshape file", (ext) => {
+		const file = `x.${ext}`;
+		expect(RECEIVERS.has(ext)).toBe(false);
+		expect(RESHAPE_RECEIVERS.has(ext)).toBe(false);
+		expect(signatureRange(["function f(a) {"], file)).toBeNull();
+		expect(leadingSignature(["function f(a) {", "}"], file)).toBeNull();
+		expect(receiverChangeClass("f(x)", "this.f(x)", file, file)).toBeNull();
+		expect(receiverOnlyLine("f(x)", "this.f(x)", file, file)).toBe(false);
+		expect(
+			reshapeEquivalent(
+				{ filename: file, lines: ["f(x)"], opensBrace: false },
+				{ filename: file, lines: ["this.f(x)"], opensBrace: false },
+			).equivalent,
+		).toBe(false);
+	});
+});
+
+describe("matcher and checker agree on receiver labels", () => {
+	it.each(AGREEMENT_LINES)("agrees on %s: %s", (ext, from, to) => {
+		const file = `f.${ext}`;
+		const label = receiverChangeClass(from, to, file, file);
+		if (label === "receiver")
+			expect(receiverOnlyLine(from, to, file, file)).toBe(true);
+	});
+
+	it("labels the read-only controls receiver and everything noisy code", () => {
+		const labels = AGREEMENT_LINES.map(([ext, from, to]) =>
+			receiverChangeClass(from, to, `f.${ext}`, `f.${ext}`),
+		);
+		expect(
+			labels.filter((l) => l === "receiver").length,
+		).toBeGreaterThanOrEqual(5);
+		expect(labels.filter((l) => l === "code").length).toBeGreaterThanOrEqual(8);
 	});
 });

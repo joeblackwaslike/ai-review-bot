@@ -153,16 +153,16 @@ function plural(n: number, word: string): string {
 	return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-const COLUMNS_PER_LEVEL: Record<string, number> = {
-	py: 4,
-	pyi: 4,
-};
+const COLUMNS_PER_LEVEL: ReadonlyMap<string, number> = new Map([
+	["py", 4],
+	["pyi", 4],
+]);
 
 function reindentPhrase(op: Operation): string {
 	const shift = op.shape?.reindent ?? 0;
 	if (shift === 0) return "";
 	const extension = (op.to[0]?.filename ?? "").split(".").pop() ?? "";
-	const perLevel = COLUMNS_PER_LEVEL[extension.toLowerCase()];
+	const perLevel = COLUMNS_PER_LEVEL.get(extension.toLowerCase());
 	const size = Math.abs(shift);
 	const direction = shift > 0 ? "deeper" : "shallower";
 	if (perLevel !== undefined && size % perLevel === 0) {
