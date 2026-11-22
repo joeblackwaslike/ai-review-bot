@@ -2709,7 +2709,7 @@ describe("a readable operator elsewhere does not disable receiver labels", () =>
 		expect(verifyRelocation(op, files)).toBe(true);
 	});
 
-	it("verifies 2000 receiver lines on the plain path within the backstop", () => {
+	it("verifies 1000 receiver lines on the plain path within the backstop", () => {
 		const lines = Array.from(
 			{ length: 3000 },
 			(_, i) => `record${i}(cart.id, total, ${i});`,
