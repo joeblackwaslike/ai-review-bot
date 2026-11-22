@@ -1,7 +1,6 @@
 import {
 	type Candidate,
 	isIndentSensitive,
-	lineCommentIndex,
 	normalizeCodeLine,
 	type Run,
 } from "../moved-blocks.js";
@@ -213,8 +212,33 @@ function commentLines(filename: string, lines: string[]): boolean[] {
 	});
 }
 
+const QUOTE_CHARS = new Set(['"', "'", "`"]);
+
+/**
+ * Index of a `//` that starts a trailing comment, or -1: outside string literals and either at
+ * the start of the line or right after whitespace, so a `//` inside a regex literal or glued to
+ * code is code. An unterminated quote hides the rest of the line.
+ */
+function commentStart(line: string): number {
+	let quote = "";
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i] as string;
+		if (quote) {
+			if (ch === "\\") i++;
+			else if (ch === quote) quote = "";
+		} else if (QUOTE_CHARS.has(ch)) quote = ch;
+		else if (
+			ch === "/" &&
+			line[i + 1] === "/" &&
+			(i === 0 || /\s/.test(line[i - 1] as string))
+		)
+			return i;
+	}
+	return -1;
+}
+
 function stripLineComment(line: string): string {
-	const at = lineCommentIndex(line);
+	const at = commentStart(line);
 	return normalizeCodeLine(at < 0 ? line : line.slice(0, at));
 }
 
@@ -233,8 +257,16 @@ function isCommentOnly(
 	if (baseComment && headComment) return true;
 	return (
 		trailing &&
-		lineCommentIndex(base) + lineCommentIndex(head) !== -2 &&
+		commentStart(base) + commentStart(head) !== -2 &&
 		stripLineComment(base) === stripLineComment(head)
+	);
+}
+
+function afterMemberAccess(tokens: string[], at: number): boolean {
+	const one = tokens[at - 1];
+	const two = tokens[at - 2];
+	return (
+		one === "." || (one === ">" && two === "-") || (one === ":" && two === ":")
 	);
 }
 
@@ -249,7 +281,7 @@ function substitutions(base: string, head: string): [string, string][] | null {
 		if (a === b) continue;
 		if (!IDENTIFIER.test(a) || !IDENTIFIER.test(b)) return null;
 		if (RESERVED.has(a) || RESERVED.has(b)) return null;
-		if (left[k - 1] === "." || right[k - 1] === ".") return null;
+		if (afterMemberAccess(left, k) || afterMemberAccess(right, k)) return null;
 		out.push([a, b]);
 	}
 	return out;

@@ -1651,3 +1651,65 @@ describe("findRelocations receiver and reshape output", () => {
 		]);
 	});
 });
+
+describe("findRelocations comment-only classification", () => {
+	const classes = (base: string[], head: string[]) =>
+		move(base, head).flatMap((op) => op.divergences.map((d) => d.class));
+	const edit = (before: string, after: string) => {
+		const base = withLine(fn(body(20)), 6, before);
+		return classes(base, withLine(base, 6, after));
+	};
+
+	it("does not read a double slash inside a regex literal as a comment", () => {
+		expect(
+			edit(
+				"  const v2 = s.replace(/\\//g, '-') + f(1);",
+				"  const v2 = s.replace(/\\//g, '-') + f(2);",
+			),
+		).toEqual(["code"]);
+		expect(
+			edit(
+				"  const v2 = s.split(/^\\/\\//) + f(1);",
+				"  const v2 = s.split(/^\\/\\//) + f(2);",
+			),
+		).toEqual(["code"]);
+	});
+
+	it("keeps a trailing comment after whitespace as comment-only", () => {
+		expect(edit("  x = 1; // note", "  x = 1; // changed")).toEqual([
+			"comment-only",
+		]);
+	});
+
+	it("does not treat a double slash glued to code as a comment", () => {
+		expect(edit("  x = 1;// note", "  x = 1;// changed")).toEqual(["code"]);
+	});
+
+	it("keeps whole-line comment edits comment-only", () => {
+		expect(edit("  // c", "  // d")).toEqual(["comment-only"]);
+	});
+
+	it("never reads a double slash inside a string as a comment", () => {
+		expect(
+			edit('  const v2 = "a // b" + f(1);', '  const v2 = "a // b" + f(2);'),
+		).toEqual(["code"]);
+	});
+
+	it("does not label a changed member after an arrow or scope operator a rename", () => {
+		const pointer = body(20).map((l, i) =>
+			i === 4 || i === 9 ? `  use(p->x, ${i});` : l,
+		);
+		const scoped = body(20).map((l, i) =>
+			i === 4 || i === 9 ? `  use(Foo::bar, ${i});` : l,
+		);
+		expect(
+			classes(fn(pointer), fn(pointer.map((l) => l.replace("p->x", "p->y")))),
+		).toEqual(["code", "code"]);
+		expect(
+			classes(
+				fn(scoped),
+				fn(scoped.map((l) => l.replace("Foo::bar", "Foo::baz"))),
+			),
+		).toEqual(["code", "code"]);
+	});
+});

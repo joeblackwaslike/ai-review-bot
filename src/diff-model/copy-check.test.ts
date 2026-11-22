@@ -809,3 +809,72 @@ describe("verifyCopy divergence classes", () => {
 		expect(verifyCopy(relabel(op, "comment-only"), files, others)).toBe(false);
 	});
 });
+
+describe("verifyCopy comment starts and member renames", () => {
+	function relabeled(
+		cls: "comment-only" | "rename",
+		before: string,
+		after: string,
+		file = "src/b.ts",
+	) {
+		const a = body(10).map((l, i) => (i === 4 ? before : l));
+		const b = a.map((l, i) => (i === 4 ? after : l));
+		const files = [withContext("src/a.ts", 10, a, ["done"]), added(file, 3, b)];
+		const { op, others } = onlyCopy(files);
+		return verifyCopy(
+			{
+				...op,
+				exact: false,
+				reviewWeight: 0,
+				divergences: op.divergences.map((d) => ({ ...d, class: cls })),
+			},
+			files,
+			others,
+		);
+	}
+
+	it("drops a regex literal change labelled comment-only", () => {
+		expect(
+			relabeled(
+				"comment-only",
+				"  const v2 = s.replace(/\\//g, '-') + f(1);",
+				"  const v2 = s.replace(/\\//g, '-') + f(2);",
+			),
+		).toBe(false);
+		expect(
+			relabeled(
+				"comment-only",
+				"  const v2 = s.split(/^\\/\\//) + f(1);",
+				"  const v2 = s.split(/^\\/\\//) + f(2);",
+			),
+		).toBe(false);
+	});
+
+	it("accepts a trailing comment edit after whitespace", () => {
+		expect(
+			relabeled("comment-only", "  x = 1; // note", "  x = 1; // changed"),
+		).toBe(true);
+	});
+
+	it("does not treat a glued double slash or a string content as a comment", () => {
+		expect(
+			relabeled("comment-only", "  x = 1;// note", "  x = 1;// changed"),
+		).toBe(false);
+		expect(
+			relabeled(
+				"comment-only",
+				'  const v2 = "a // b" + f(1);',
+				'  const v2 = "a // b" + f(2);',
+			),
+		).toBe(false);
+	});
+
+	it("drops a changed member after an arrow or scope operator labelled rename", () => {
+		expect(relabeled("rename", "  use(p->x, 4);", "  use(p->y, 4);")).toBe(
+			false,
+		);
+		expect(
+			relabeled("rename", "  use(Foo::bar, 4);", "  use(Foo::baz, 4);"),
+		).toBe(false);
+	});
+});

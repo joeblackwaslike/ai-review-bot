@@ -2861,3 +2861,127 @@ describe("verifyRelocation divergence classes", () => {
 		expect(verifyRelocation(relabel(op, "comment-only"), files)).toBe(false);
 	});
 });
+
+describe("verifyRelocation comment starts and member renames", () => {
+	function relabeled(
+		cls: "comment-only" | "rename",
+		base: string[],
+		head: string[],
+		file = "src/b.ts",
+	) {
+		const { files, op } = relocationIn(base, head, file);
+		return verifyRelocation(
+			{
+				...op,
+				exact: false,
+				reviewWeight: 0,
+				divergences: op.divergences.map((d) => ({ ...d, class: cls })),
+			},
+			files,
+		);
+	}
+
+	function relocationIn(base: string[], head: string[], file: string) {
+		const files = moveFiles(base, head).map((f) =>
+			f.filename === "src/b.ts" ? { ...f, filename: file } : f,
+		);
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		return { files, op: ops[0] as Operation };
+	}
+
+	const edit = (before: string, after: string) => {
+		const base = withLine(fn(body(20)), 6, before);
+		return [base, withLine(base, 6, after)] as const;
+	};
+
+	it("drops a regex literal change labelled comment-only", () => {
+		const [a, b] = edit(
+			"  const v2 = s.replace(/\\//g, '-') + f(1);",
+			"  const v2 = s.replace(/\\//g, '-') + f(2);",
+		);
+		expect(relabeled("comment-only", a, b)).toBe(false);
+		const [c, d] = edit(
+			"  const v2 = s.split(/^\\/\\//) + f(1);",
+			"  const v2 = s.split(/^\\/\\//) + f(2);",
+		);
+		expect(relabeled("comment-only", c, d)).toBe(false);
+	});
+
+	it("accepts a trailing comment edit after whitespace and a whole-line edit", () => {
+		const [a, b] = edit("  x = 1; // note", "  x = 1; // changed");
+		expect(relabeled("comment-only", a, b)).toBe(true);
+		const [c, d] = edit("  // c", "  // d");
+		expect(relabeled("comment-only", c, d)).toBe(true);
+	});
+
+	it("does not treat a double slash glued to code as a comment start", () => {
+		const [a, b] = edit("  x = 1;// note", "  x = 1;// changed");
+		expect(relabeled("comment-only", a, b)).toBe(false);
+	});
+
+	it("never reads a double slash inside a string as a comment", () => {
+		const [a, b] = edit(
+			'  const v2 = "a // b" + f(1);',
+			'  const v2 = "a // b" + f(2);',
+		);
+		expect(relabeled("comment-only", a, b)).toBe(false);
+	});
+
+	it("accepts a hash comment after whitespace in a python file", () => {
+		const base = withLine(fn(body(20)), 6, "  x = 1  # note");
+		const head = withLine(base, 6, "  x = 1  # changed");
+		const files = [
+			pushFile(
+				"src/a.py",
+				[`@@ -10,${base.length} +9,0 @@`, ...base.map((l) => `-${l}`)].join(
+					"\n",
+				),
+			),
+			pushFile(
+				"src/b.py",
+				[`@@ -0,0 +3,${head.length} @@`, ...head.map((l) => `+${l}`)].join(
+					"\n",
+				),
+			),
+		];
+		const ops = findRelocations(files);
+		expect(ops).toHaveLength(1);
+		const op = ops[0] as Operation;
+		const lie = {
+			...op,
+			exact: false,
+			reviewWeight: 0,
+			divergences: op.divergences.map((d) => ({
+				...d,
+				class: "comment-only" as const,
+			})),
+		};
+		expect(verifyRelocation(lie, files)).toBe(true);
+	});
+
+	it("drops a changed member after an arrow or scope operator labelled rename", () => {
+		const pointer = body(20).map((l, i) =>
+			i === 4 || i === 9 ? `  use(p->x, ${i});` : l,
+		);
+		const scoped = body(20).map((l, i) =>
+			i === 4 || i === 9 ? `  use(Foo::bar, ${i});` : l,
+		);
+		expect(
+			relabeled(
+				"rename",
+				fn(pointer),
+				fn(pointer.map((l) => l.replace("p->x", "p->y"))),
+				"src/b.c",
+			),
+		).toBe(false);
+		expect(
+			relabeled(
+				"rename",
+				fn(scoped),
+				fn(scoped.map((l) => l.replace("Foo::bar", "Foo::baz"))),
+				"src/b.rs",
+			),
+		).toBe(false);
+	});
+});
